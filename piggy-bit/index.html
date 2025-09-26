@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Piggy Bit</title>
+  <!-- Example: custom title font link could be added here -->
+  <style>
+    #early-error {
+      display: none;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      border: 1px solid #000;
+      padding: 12px;
+      margin: 12px;
+      color: #000;
+      background: #fff;
+    }
+  </style>
+  <script>
+    (function () {
+      function show(msg) {
+        var el = document.getElementById('early-error');
+        if (!el) return;
+        el.style.display = 'block';
+        el.textContent = 'Runtime error: ' + msg;
+      }
+      window.addEventListener('error', function (e) { show(e?.error?.message || e?.message || String(e)); });
+      window.addEventListener('unhandledrejection', function (e) { show(e?.reason?.message || e?.reason || String(e)); });
+    })();
+  </script>
+</head>
+
+<body>
+  <div id="early-error"></div>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
