@@ -1,0 +1,22 @@
+{
+    "name": "piggy-bit-contracts",
+    "version": "0.0.1",
+    "private": true,
+    "scripts": {
+        "build": "hardhat compile",
+        "deploy:testnet": "hardhat run scripts/deploy.ts --network rskTestnet",
+        "deploy:mainnet": "hardhat run scripts/deploy.ts --network rskMainnet"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-ethers": "^4.0.1",
+        "@nomicfoundation/hardhat-verify": "^3.0.2",
+        "@openzeppelin/contracts": "^5.4.0",
+        "@types/node": "^24.5.2",
+        "dotenv": "^17.2.2",
+        "ethers": "^6.15.0",
+        "hardhat": "^3.0.6",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.9.2"
+    },
+    "type": "module"
+}
