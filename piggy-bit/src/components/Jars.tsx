@@ -82,11 +82,14 @@ export function Jars() {
 
     const [upiJarId, setUpiJarId] = useState<string | null>(null)
 
-    // Load jars when wallet connects
+    // Load jars when wallet connects, clear when disconnects
     useEffect(() => {
         if (isConnected && address) {
             const savedJars = readJarsFor(address)
             setJars(savedJars)
+        } else {
+            // Clear jars when wallet disconnects
+            setJars([])
         }
     }, [isConnected, address])
 
@@ -355,7 +358,7 @@ export function Jars() {
             </section>
 
             {activeJars.length === 0 ? (
-                <div style={{ color: '#444' }}>No jars yet.</div>
+                <div style={{ color: '#444' }}>Connect wallet to create / view jars</div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
                     {activeJars.map(jar => {
