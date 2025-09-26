@@ -8,7 +8,7 @@ export default ({ mode }: { mode: string }) => {
   const proxy: Record<string, any> = {}
   if (endpoint) {
     try {
-      const u = new URL(endpoint)
+      const u = new globalThis.URL(endpoint)
       proxy['/agent/submit'] = {
         target: `${u.protocol}//${u.host}`,
         changeOrigin: true,

@@ -58,12 +58,11 @@ export function Jars() {
     const [name, setName] = useState('My Jar')
     const [target, setTarget] = useState('10')
     const [recurring, setRecurring] = useState('100')
-    const [asset, setAsset] = useState<'RBTC' | 'ETH'>('RBTC')
+    const [asset] = useState<'RBTC' | 'ETH'>('RBTC')
     const [cadence, setCadence] = useState<'daily' | 'weekly' | 'monthly'>('daily')
-    const [autoSwap, setAutoSwap] = useState(true)
+    const [autoSwap] = useState(true)
     const [creating, setCreating] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
-    const [txStatus, setTxStatus] = useState<string | null>(null)
 
     // Simulation time and notifications
     const [simDay, setSimDay] = useState<number>(() => {

@@ -33,7 +33,7 @@ const DEFAULT_FEEDS: { id: string; label: string; symbol: string }[] = [
 ]
 
 export function PythPriceFeeds() {
-  const defaultIds = useMemo(() => DEFAULT_FEEDS.map(f => f.id).join(','), [])
+  // const defaultIds = useMemo(() => DEFAULT_FEEDS.map(f => f.id).join(','), [])
   const [idsInput, setIdsInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState<FeedRow[]>([])

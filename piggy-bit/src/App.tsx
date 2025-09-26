@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAccount, useConnect } from 'wagmi'
 import './App.css'
 import { Header } from './components/Header'
@@ -7,7 +7,7 @@ import { AgentChat } from './components/AgentChat'
 import { PythPriceFeeds } from './components/PythPriceFeeds'
 
 function App() {
-  const { status, error } = useConnect()
+  const { error } = useConnect()
   const { isConnected } = useAccount()
   const [uiMessage, setUiMessage] = useState<string | null>(null)
 
