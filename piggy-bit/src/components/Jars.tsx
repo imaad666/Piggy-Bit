@@ -38,7 +38,12 @@ function readJarsFor(address?: string | null): Jar[] {
     } catch { return [] }
 }
 function writeJarsFor(address: string, jars: Jar[]) {
-    try { localStorage.setItem(`piggybit:jars:${address.toLowerCase()}`, JSON.stringify(jars)) } catch { }
+    try {
+        // Only write if we have a valid address and jars array
+        if (address && address.length === 42 && jars.length >= 0) {
+            localStorage.setItem(`piggybit:jars:${address.toLowerCase()}`, JSON.stringify(jars))
+        }
+    } catch { }
 }
 
 export function Jars() {
@@ -77,15 +82,27 @@ export function Jars() {
 
     const [upiJarId, setUpiJarId] = useState<string | null>(null)
 
-    // Per-account persistence
+    // Load jars when wallet connects
     useEffect(() => {
-        if (!isConnected || !address) { setJars([]); return }
-        setJars(readJarsFor(address))
+        if (isConnected && address) {
+            const savedJars = readJarsFor(address)
+            setJars(savedJars)
+        }
     }, [isConnected, address])
+
+    // Save jars only when they actually change (not on initial load)
+    const [hasLoaded, setHasLoaded] = useState(false)
     useEffect(() => {
-        if (!isConnected || !address) return
-        writeJarsFor(address, jars)
-    }, [jars, isConnected, address])
+        if (address && hasLoaded) {
+            writeJarsFor(address, jars)
+        }
+    }, [jars, address, hasLoaded])
+
+    useEffect(() => {
+        if (isConnected && address) {
+            setHasLoaded(true)
+        }
+    }, [isConnected, address])
     useEffect(() => { try { localStorage.setItem('piggybit:simDay', String(simDay)) } catch { } }, [simDay])
     useEffect(() => { try { localStorage.setItem('piggybit:notifications', JSON.stringify(notifications)) } catch { } }, [notifications])
 
@@ -159,7 +176,13 @@ export function Jars() {
             const addr = receipt.contractAddress as `0x${string}` | undefined
             if (!addr) throw new Error('No address')
             const newJar: Jar = { id: Math.random().toString(36).slice(2), name: nameVal, targetUsd: targetVal, thresholdUsd: targetVal, recurringUsd: topupVal, targetAsset: 'RBTC', cadence, autoSwap, depositedUsd: 0, status: 'filling', isDeployed: true, contractAddress: addr, isUsdcJar: true, usdcToken: token }
-            setJars(prev => [newJar, ...prev])
+            const updatedJars = [newJar, ...jars]
+            setJars(updatedJars)
+            // IMMEDIATELY save to localStorage
+            if (address) {
+                console.log('IMMEDIATE SAVE: Saving new jar for address:', address)
+                writeJarsFor(address, updatedJars)
+            }
             setUsdcOpen(false)
         } catch (e: any) { setFormError(e?.message || String(e)) } finally { setCreating(false) }
     }
@@ -214,7 +237,13 @@ export function Jars() {
             const deployedAddress = receipt.contractAddress as `0x${string}` | undefined
             if (!deployedAddress) throw new Error('No contract address in receipt')
             const newJar: Jar = { id: Math.random().toString(36).slice(2), name: name.trim() || 'Jar', targetUsd, thresholdUsd: targetUsd, recurringUsd: topupInr, targetAsset: asset, cadence, autoSwap, depositedUsd: 0, status: 'filling', isDeployed: true, contractAddress: deployedAddress, isUsdcJar: false }
-            setJars(prev => [newJar, ...prev])
+            const updatedJars = [newJar, ...jars]
+            setJars(updatedJars)
+            // IMMEDIATELY save to localStorage
+            if (address) {
+                console.log('IMMEDIATE SAVE: Saving new jar for address:', address)
+                writeJarsFor(address, updatedJars)
+            }
             setCreateOpen(false)
         } catch (err: any) { setFormError(err?.message || String(err)) } finally { setCreating(false) }
     }
