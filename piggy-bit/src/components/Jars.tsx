@@ -322,6 +322,7 @@ export function Jars() {
                     <button onClick={() => advanceSim(1)} style={{ padding: '6px 10px', border: '1px solid #000', background: '#fff', cursor: 'pointer' }}>+1 day</button>
                     <button onClick={() => advanceSim(7)} style={{ padding: '6px 10px', border: '1px solid #000', background: '#fff', cursor: 'pointer' }}>+1 week</button>
                     <button onClick={() => advanceSim(30)} style={{ padding: '6px 10px', border: '1px solid #000', background: '#fff', cursor: 'pointer' }}>+1 month</button>
+                    <button onClick={() => setSimDay(0)} style={{ padding: '6px 10px', border: '1px solid #000', background: '#ffeb3b', cursor: 'pointer' }}>Reset</button>
                 </div>
             </section>
             {notifications.length > 0 && (
