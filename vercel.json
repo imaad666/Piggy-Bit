@@ -1,5 +1,4 @@
 {
     "buildCommand": "cd piggy-bit && npm install && npm run build",
-    "outputDirectory": "piggy-bit/dist",
-    "installCommand": "cd piggy-bit && npm install"
+    "outputDirectory": "piggy-bit/dist"
 }
