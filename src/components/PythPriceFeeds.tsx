@@ -190,7 +190,10 @@ export function PythPriceFeeds() {
 
   return (
     <section style={{ marginTop: 32, marginBottom: 48 }}>
-      <h3 style={{ margin: 0, marginBottom: 8 }}>Pyth Price Feeds</h3>
+      <h3 style={{ margin: 0, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <img src="/pyth.png" alt="Pyth" style={{ width: 20, height: 20, objectFit: 'contain' }} />
+        Pyth Price Feeds
+      </h3>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, margin: '6px 0 8px 0' }}>
         <input value={pythAddress} onChange={e => setPythAddress(e.target.value)} placeholder="Pyth contract address (0x...)" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
         <button onClick={launchIPyth} style={{ padding: '8px 12px', border: '1px solid #000', background: '#000', color: '#fff', cursor: 'pointer' }}>Launch IPyth</button>

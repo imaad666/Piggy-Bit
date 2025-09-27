@@ -169,7 +169,9 @@ export function Header() {
                             <button
                                 onClick={() => onNetworkSelect('rootstock')}
                                 style={{
-                                    display: 'block',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
                                     width: '100%',
                                     padding: '8px 12px',
                                     border: 'none',
@@ -179,12 +181,15 @@ export function Header() {
                                     textAlign: 'left',
                                 }}
                             >
-                                🟠 Rootstock
+                                <img src="/rootstock_black.png" alt="Rootstock" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                                Rootstock
                             </button>
                             <button
                                 onClick={() => onNetworkSelect('sepolia')}
                                 style={{
-                                    display: 'block',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
                                     width: '100%',
                                     padding: '8px 12px',
                                     border: 'none',
@@ -194,7 +199,8 @@ export function Header() {
                                     textAlign: 'left',
                                 }}
                             >
-                                🔵 Sepolia ETH
+                                <img src="/sepolia.png" alt="Sepolia" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                                Sepolia ETH
                             </button>
                         </div>
                     )}

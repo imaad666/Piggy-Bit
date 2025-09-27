@@ -503,7 +503,17 @@ export function Jars() {
                 </section>
             )}
             <section style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h2 style={{ fontSize: 20, margin: 0 }}>My Jars - {selectedNetwork === 'rootstock' ? '🟠 Rootstock' : '🔵 Sepolia ETH'}</h2>
+                <h2 style={{ fontSize: 20, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>My Jars - {selectedNetwork === 'rootstock' ? (
+                    <>
+                        <img src="/rootstock_black.png" alt="Rootstock" style={{ width: 20, height: 20, objectFit: 'contain' }} />
+                        Rootstock
+                    </>
+                ) : (
+                    <>
+                        <img src="/sepolia.png" alt="Sepolia" style={{ width: 20, height: 20, objectFit: 'contain' }} />
+                        Sepolia ETH
+                    </>
+                )}</h2>
                 <div style={{ display: 'flex', gap: 8 }}>
                     {selectedNetwork === 'rootstock' ? (
                         <>
@@ -522,7 +532,7 @@ export function Jars() {
                             <button onClick={() => setPyusdOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#e5e5e5' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Create PYUSD Jar</button>
                         </>
                     )}
-                    <button onClick={clearCurrentJars} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Clear Jars</button>
+                    <button onClick={clearCurrentJars} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#dc2626' : '#f0f0f0', color: isConnected ? '#fff' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Clear Jars</button>
                 </div>
             </section>
 
@@ -530,8 +540,20 @@ export function Jars() {
                 <div style={{ color: '#444', textAlign: 'center', padding: '40px 20px' }}>
                     <div style={{ marginBottom: 8 }}>Connect your wallet to create and view jars</div>
                     <div style={{ fontSize: 12, opacity: 0.7 }}>
-                        📱 Connecting will add Rootstock Testnet & Sepolia networks to your wallet<br />
-                        🟠 Use Rootstock for tRBTC jars • 🔵 Use Sepolia for PYUSD jars
+                        <div style={{ marginBottom: 4 }}>
+                            Connecting will add Rootstock Testnet & Sepolia networks to your wallet
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <img src="/rootstock_black.png" alt="Rootstock" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+                                <span>Use Rootstock for tRBTC jars</span>
+                            </div>
+                            <span>•</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <img src="/sepolia.png" alt="Sepolia" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+                                <span>Use Sepolia for PYUSD jars</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             ) : (
@@ -703,7 +725,10 @@ export function Jars() {
                             {formError && (<div style={{ marginTop: 8, color: '#cc0000', fontSize: 12 }}>{formError}</div>)}
                             <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                                 <button type="button" onClick={() => setCreateOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
-                                <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer' }}>{creating ? 'Creating...' : 'Create UPI Jar'}</button>
+                                <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                    {creating ? 'Creating...' : 'Create UPI Jar'}
+                                    <img src="/upi_logo_icon.png" alt="UPI" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -747,7 +772,7 @@ export function Jars() {
                                 <button type="button" onClick={() => setPyusdOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
                                 <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                                     {creating ? 'Creating...' : 'Create PYUSD Jar'}
-                                    <span style={{ fontSize: 12 }}>🔵</span>
+                                    <img src="/pyusdc.png" alt="PYUSD" style={{ width: 18, height: 18, objectFit: 'contain' }} />
                                 </button>
                             </div>
                         </form>
