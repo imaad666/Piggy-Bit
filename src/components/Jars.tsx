@@ -434,31 +434,31 @@ export function Jars() {
     function openUpi(jarId: string) { setUpiJarId(jarId) }
     function closeUpi() { setUpiJarId(null) }
     function payUpi(jarId: string) { const jar = jars.find(j => j.id === jarId); if (!jar) return; onSimulateDeposit(jarId, Number(jar.recurringTrbtc) || 0); closeUpi() }
-    
+
     function clearAllNotifications() {
         setNotifications([])
     }
 
     // Simulation helpers
     function periodDaysFor(c: 'daily' | 'weekly' | 'monthly') { return c === 'daily' ? 1 : c === 'weekly' ? 7 : 30 }
-    
+
     function advanceSim(days: number) {
         if (days <= 0) return
         const prevDay = simDay
         const nextDay = prevDay + days
         setSimDay(nextDay)
-        
+
         // Check each jar for due payments
         jars.forEach(jar => {
             if (jar.status !== 'filling') return
-            
+
             const periodDays = periodDaysFor(jar.cadence)
             const lastPaid = jar.lastSimDayPaid ?? 0
             const daysSinceLastPaid = nextDay - lastPaid
-            
+
             if (daysSinceLastPaid >= periodDays) {
                 const periodsDue = Math.floor(daysSinceLastPaid / periodDays)
-                
+
                 // Create notification for due payments
                 const notificationId = Math.random().toString(36).slice(2)
                 const newNotification: Notification = {
@@ -467,16 +467,16 @@ export function Jars() {
                     text: `${periodsDue} ${jar.cadence} payment${periodsDue > 1 ? 's' : ''} due for "${jar.name}"`,
                     periods: periodsDue
                 }
-                
+
                 setNotifications(prev => {
                     // Remove existing notification for this jar
                     const filtered = prev.filter(n => n.jarId !== jar.id)
                     return [newNotification, ...filtered]
                 })
-                
+
                 // Update jar's last paid day
-                setJars(prev => prev.map(j => 
-                    j.id === jar.id 
+                setJars(prev => prev.map(j =>
+                    j.id === jar.id
                         ? { ...j, lastSimDayPaid: lastPaid + periodsDue * periodDays }
                         : j
                 ))
