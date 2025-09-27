@@ -64,9 +64,9 @@ export function Jars() {
     const [trbtcOpen, setTrbtcOpen] = useState(false)
     const [pyusdOpen, setPyusdOpen] = useState(false)
     const [pyusdUpiOpen, setPyusdUpiOpen] = useState(false)
-    const [name, setName] = useState('My Jar')
-    const [target, setTarget] = useState('0.01')
-    const [recurring, setRecurring] = useState('0.001')
+    const [name, setName] = useState('')
+    const [target, setTarget] = useState('')
+    const [recurring, setRecurring] = useState('')
     const [cadence, setCadence] = useState<'daily' | 'weekly' | 'monthly'>('daily')
     const [creating, setCreating] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
@@ -84,15 +84,15 @@ export function Jars() {
         const targetVal = Number(target) // RBTC
         const recurringVal = Number(recurring) // RBTC (converted from INR input)
         if (!Number.isFinite(targetVal) || targetVal <= 0 || !Number.isFinite(recurringVal) || recurringVal <= 0) return ''
-        
+
         // Use real-time BTC price if available, fallback to mock rate
         const btcInrPrice = priceData.btcInr || INR_PER_RBTC
         const calculation = calculateDaysToFill(targetVal, recurringVal * btcInrPrice, cadence, btcInrPrice)
-        
+
         const unit = cadence === 'daily' ? 'day' : cadence === 'weekly' ? 'week' : 'month'
         const unitPlural = calculation.periods === 1 ? unit : unit + 's'
         const inrAmount = Math.round(calculation.inrAmount)
-        
+
         const priceNote = priceData.btcInr ? ' (Live BTC price)' : ' (Estimated)'
         return `Est: ${calculation.periods} ${unitPlural} to fill (₹${inrAmount.toLocaleString()} per ${unit})${priceNote}`
     }, [target, recurring, cadence, priceData])
@@ -107,19 +107,19 @@ export function Jars() {
     })
 
     // tRBTC modal fields
-    const [trbtcName, setTrbtcName] = useState('tRBTC Jar')
-    const [trbtcTarget, setTrbtcTarget] = useState('0.01')
-    const [trbtcTopup, setTrbtcTopup] = useState('0.001')
+    const [trbtcName, setTrbtcName] = useState('')
+    const [trbtcTarget, setTrbtcTarget] = useState('')
+    const [trbtcTopup, setTrbtcTopup] = useState('')
 
     // PYUSD modal fields
-    const [pyusdName, setPyusdName] = useState('PYUSD Jar')
-    const [pyusdTarget, setPyusdTarget] = useState('100')
-    const [pyusdTopup, setPyusdTopup] = useState('10')
+    const [pyusdName, setPyusdName] = useState('')
+    const [pyusdTarget, setPyusdTarget] = useState('')
+    const [pyusdTopup, setPyusdTopup] = useState('')
 
     // PYUSD UPI modal fields
-    const [pyusdUpiName, setPyusdUpiName] = useState('PYUSD UPI Jar')
-    const [pyusdUpiTarget, setPyusdUpiTarget] = useState('100')
-    const [pyusdUpiTopup, setPyusdUpiTopup] = useState('840') // ₹840 = 10 PYUSD
+    const [pyusdUpiName, setPyusdUpiName] = useState('')
+    const [pyusdUpiTarget, setPyusdUpiTarget] = useState('')
+    const [pyusdUpiTopup, setPyusdUpiTopup] = useState('')
 
     const [upiJarId, setUpiJarId] = useState<string | null>(null)
 
@@ -156,10 +156,10 @@ export function Jars() {
             const data = await fetchBtcPrice()
             setPriceData(data)
         }
-        
+
         fetchPrice() // Initial fetch
         const interval = setInterval(fetchPrice, 30000) // Update every 30 seconds
-        
+
         return () => clearInterval(interval)
     }, [])
 
@@ -683,15 +683,15 @@ export function Jars() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Jar name</span>
-                                    <input value={trbtcName} onChange={e => setTrbtcName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={trbtcName} onChange={e => setTrbtcName(e.target.value)} placeholder="My tRBTC Jar" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Target (tRBTC)</span>
-                                    <input value={trbtcTarget} onChange={e => setTrbtcTarget(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={trbtcTarget} onChange={e => setTrbtcTarget(e.target.value)} type="number" min="0.001" step="0.001" placeholder="0.01" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Auto top-up (tRBTC)</span>
-                                    <input value={trbtcTopup} onChange={e => setTrbtcTopup(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={trbtcTopup} onChange={e => setTrbtcTopup(e.target.value)} type="number" min="0.001" step="0.001" placeholder="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
@@ -728,15 +728,15 @@ export function Jars() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Jar name</span>
-                                    <input value={name} onChange={e => setName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={name} onChange={e => setName(e.target.value)} placeholder="My iPhone Fund" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>Target (RBTC) - RBTC = BTC</span>
-                                    <input value={target} onChange={e => setTarget(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <span>Target (RBTC)</span>
+                                    <input value={target} onChange={e => setTarget(e.target.value)} type="number" min="0.001" step="0.001" placeholder="0.01" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Auto top-up (INR)</span>
-                                    <input value={Math.round(Number(recurring) * INR_PER_RBTC)} onChange={e => setRecurring(String(Number(e.target.value) / INR_PER_RBTC))} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={Math.round(Number(recurring) * INR_PER_RBTC)} onChange={e => setRecurring(String(Number(e.target.value) / INR_PER_RBTC))} type="number" min="1" step="1" placeholder="500" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
@@ -782,15 +782,15 @@ export function Jars() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Jar name</span>
-                                    <input value={pyusdName} onChange={e => setPyusdName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={pyusdName} onChange={e => setPyusdName(e.target.value)} placeholder="My PYUSD Jar" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Target (PYUSD)</span>
-                                    <input value={pyusdTarget} onChange={e => setPyusdTarget(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={pyusdTarget} onChange={e => setPyusdTarget(e.target.value)} type="number" min="1" step="1" placeholder="100" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Auto top-up (PYUSD)</span>
-                                    <input value={pyusdTopup} onChange={e => setPyusdTopup(e.target.value)} type="number" min="0.01" step="0.01" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={pyusdTopup} onChange={e => setPyusdTopup(e.target.value)} type="number" min="0.01" step="0.01" placeholder="10" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
@@ -827,15 +827,15 @@ export function Jars() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Jar name</span>
-                                    <input value={pyusdUpiName} onChange={e => setPyusdUpiName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={pyusdUpiName} onChange={e => setPyusdUpiName(e.target.value)} placeholder="My PYUSD UPI Jar" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Target (PYUSD)</span>
-                                    <input value={pyusdUpiTarget} onChange={e => setPyusdUpiTarget(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={pyusdUpiTarget} onChange={e => setPyusdUpiTarget(e.target.value)} type="number" min="1" step="1" placeholder="100" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Auto top-up (INR)</span>
-                                    <input value={pyusdUpiTopup} onChange={e => setPyusdUpiTopup(e.target.value)} type="number" min="84" step="84" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={pyusdUpiTopup} onChange={e => setPyusdUpiTopup(e.target.value)} type="number" min="84" step="84" placeholder="500" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
