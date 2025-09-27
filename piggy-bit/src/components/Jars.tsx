@@ -6,7 +6,7 @@ import { PiggyJarPYUSDAbi, PiggyJarPYUSDBytecode } from '../contracts/PiggyJarPY
 import { PiggyJarPYUSDUPIAbi, PiggyJarPYUSDUPIBytecode } from '../contracts/PiggyJarPYUSDUPI'
 import { ERC20Abi } from '../contracts/erc20'
 import { getWalletClient } from 'wagmi/actions'
-import { config as wagmiConfig, sepoliaTestnet } from '../wagmi'
+import { config as wagmiConfig } from '../wagmi'
 
 // Exchange rates and constants
 const INR_PER_RBTC = 9720986 // Mock exchange rate: 1 RBTC = 1 BTC ≈ ₹9.7M INR (Dec 2024)
