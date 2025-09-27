@@ -40,13 +40,11 @@ function App() {
       </main>
       <footer style={{ borderTop: '1px solid #000', padding: '12px 24px', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontWeight: 600 }}>Piggy Bit</div>
-        <div style={{ opacity: 0.9 }}>Uses Rootstock • Sepolia • PYUSD • Pyth • Made for ETHGlobal Delhi</div>
+        <div style={{ opacity: 0.9 }}>Uses Rootstock • PayPal PYUSD • Pyth • Made for ETHGlobal Delhi</div>
       </footer>
     </div>
   )
 }
 
 export default App
-// Cache bust Sun Sep 28 01:51:34 IST 2025
-// Force fresh deployment Sun Sep 28 01:57:20 IST 2025
-// Force Vercel deployment Sun Sep 28 03:22:09 IST 2025
+

@@ -7,6 +7,7 @@ import { PiggyJarPYUSDUPIAbi, PiggyJarPYUSDUPIBytecode } from '../contracts/Pigg
 import { getWalletClient } from 'wagmi/actions'
 import { config as wagmiConfig } from '../wagmi'
 import { useNetwork } from '../NetworkContext'
+import { fetchBtcPrice, calculateDaysToFill, type PriceData } from '../utils/priceUtils'
 
 // tRBTC jar functionality
 const INR_PER_RBTC = 9720986 // Mock exchange rate: 1 RBTC = 1 BTC ≈ ₹9.7M INR (Dec 2024)
@@ -70,17 +71,31 @@ export function Jars() {
     const [creating, setCreating] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
 
-    // Calculate estimated time to fill for UPI jars
+    // Price data state
+    const [priceData, setPriceData] = useState<PriceData>({
+        btcUsd: null,
+        usdInr: 83.5,
+        btcInr: null,
+        lastUpdated: null
+    })
+
+    // Calculate estimated time to fill for UPI jars using real-time BTC price
     const etaText = useMemo(() => {
         const targetVal = Number(target) // RBTC
         const recurringVal = Number(recurring) // RBTC (converted from INR input)
         if (!Number.isFinite(targetVal) || targetVal <= 0 || !Number.isFinite(recurringVal) || recurringVal <= 0) return ''
-        const periodsToFill = Math.ceil(targetVal / recurringVal)
+        
+        // Use real-time BTC price if available, fallback to mock rate
+        const btcInrPrice = priceData.btcInr || INR_PER_RBTC
+        const calculation = calculateDaysToFill(targetVal, recurringVal * btcInrPrice, cadence, btcInrPrice)
+        
         const unit = cadence === 'daily' ? 'day' : cadence === 'weekly' ? 'week' : 'month'
-        const unitPlural = periodsToFill === 1 ? unit : unit + 's'
-        const inrAmount = Math.round(recurringVal * INR_PER_RBTC)
-        return `Est: ${periodsToFill} ${unitPlural} to fill (₹${inrAmount.toLocaleString()} per ${unit})`
-    }, [target, recurring, cadence])
+        const unitPlural = calculation.periods === 1 ? unit : unit + 's'
+        const inrAmount = Math.round(calculation.inrAmount)
+        
+        const priceNote = priceData.btcInr ? ' (Live BTC price)' : ' (Estimated)'
+        return `Est: ${calculation.periods} ${unitPlural} to fill (₹${inrAmount.toLocaleString()} per ${unit})${priceNote}`
+    }, [target, recurring, cadence, priceData])
 
     // Simulation time and notifications
     const [simDay, setSimDay] = useState<number>(() => {
@@ -134,6 +149,19 @@ export function Jars() {
     }, [isConnected, address])
     useEffect(() => { try { localStorage.setItem('piggybit:simDay', String(simDay)) } catch { } }, [simDay])
     useEffect(() => { try { localStorage.setItem('piggybit:notifications', JSON.stringify(notifications)) } catch { } }, [notifications])
+
+    // Fetch BTC price on component mount and every 30 seconds
+    useEffect(() => {
+        const fetchPrice = async () => {
+            const data = await fetchBtcPrice()
+            setPriceData(data)
+        }
+        
+        fetchPrice() // Initial fetch
+        const interval = setInterval(fetchPrice, 30000) // Update every 30 seconds
+        
+        return () => clearInterval(interval)
+    }, [])
 
 
 
@@ -703,7 +731,7 @@ export function Jars() {
                                     <input value={name} onChange={e => setName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>Target (RBTC)</span>
+                                    <span>Target (RBTC) - RBTC = BTC</span>
                                     <input value={target} onChange={e => setTarget(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
@@ -721,6 +749,14 @@ export function Jars() {
                                     </select>
                                 </label>
                             </div>
+                            {priceData.btcUsd && (
+                                <div style={{ marginTop: 8, fontSize: 11, color: '#888' }}>
+                                    BTC: ${priceData.btcUsd.toLocaleString()} • INR: ₹{priceData.btcInr?.toLocaleString()}
+                                    {priceData.lastUpdated && (
+                                        <span style={{ marginLeft: 8 }}>• Updated: {priceData.lastUpdated.toLocaleTimeString()}</span>
+                                    )}
+                                </div>
+                            )}
                             {etaText && (<div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>{etaText}</div>)}
                             {formError && (<div style={{ marginTop: 8, color: '#cc0000', fontSize: 12 }}>{formError}</div>)}
                             <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
