@@ -1,6 +1,6 @@
 {
-    "buildCommand": "cd piggy-bit && npm install && npm run build",
+    "buildCommand": "cd piggy-bit && npm install --legacy-peer-deps && npm run build",
     "outputDirectory": "piggy-bit/dist",
-    "installCommand": "cd piggy-bit && npm install --legacy-peer-deps",
+    "installCommand": "cd piggy-bit && npm ci --legacy-peer-deps --prefer-offline",
     "framework": "vite"
 }

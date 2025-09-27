@@ -23,5 +23,17 @@ export default ({ mode }: { mode: string }) => {
   return defineConfig({
     plugins: [react()],
     server: { proxy },
+    optimizeDeps: {
+      exclude: ['axios']
+    },
+    build: {
+      rollupOptions: {
+        external: (id) => {
+          // Externalize axios to prevent bundling conflicts
+          if (id === 'axios') return true
+          return false
+        }
+      }
+    }
   })
 }
