@@ -4,4 +4,4 @@
     "installCommand": "npm install --legacy-peer-deps",
     "framework": "vite",
     "rootDirectory": "piggy-bit"
-}// Updated deployment config
+}
