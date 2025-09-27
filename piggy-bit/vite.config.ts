@@ -24,13 +24,13 @@ export default ({ mode }: { mode: string }) => {
     plugins: [react()],
     server: { proxy },
     optimizeDeps: {
-      exclude: ['axios']
+      include: ['axios']
     },
     build: {
       rollupOptions: {
         external: (id) => {
-          // Externalize axios to prevent bundling conflicts
-          if (id === 'axios') return true
+          // Don't externalize axios - bundle it
+          if (id === 'axios') return false
           return false
         }
       }
