@@ -21,6 +21,12 @@ const config: HardhatUserConfig = {
       chainId: 30,
       url: process.env.RSK_MAINNET_RPC || "https://public-node.rsk.co",
       accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : []
+    },
+    sepolia: {
+      type: 'http',
+      chainId: 11155111,
+      url: process.env.SEPOLIA_RPC || "https://rpc.sepolia.org",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : []
     }
   },
   etherscan: {

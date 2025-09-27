@@ -2,11 +2,16 @@ import { useEffect, useState, useMemo } from 'react'
 import { useAccount, useChainId, useSwitchChain, usePublicClient } from 'wagmi'
 import type { Hex } from 'viem'
 import { PiggyJarTRBTCAbi, PiggyJarTRBTCBytecode } from '../contracts/PiggyJarTRBTC'
+import { PiggyJarPYUSDAbi, PiggyJarPYUSDBytecode } from '../contracts/PiggyJarPYUSD'
+import { PiggyJarPYUSDUPIAbi, PiggyJarPYUSDUPIBytecode } from '../contracts/PiggyJarPYUSDUPI'
+import { ERC20Abi } from '../contracts/erc20'
 import { getWalletClient } from 'wagmi/actions'
-import { config as wagmiConfig } from '../wagmi'
+import { config as wagmiConfig, sepoliaTestnet } from '../wagmi'
 
-// tRBTC jar functionality
+// Exchange rates and constants
 const INR_PER_RBTC = 9720986 // Mock exchange rate: 1 RBTC = 1 BTC ≈ ₹9.7M INR (Dec 2024)
+const INR_PER_PYUSD = 85 // Mock exchange rate: 1 PYUSD ≈ ₹85 INR (Dec 2024)
+const PYUSD_ADDRESS_SEPOLIA = '0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9' // PYUSD on Sepolia testnet
 
 export type Jar = {
     id: string
@@ -20,6 +25,8 @@ export type Jar = {
     isDeployed: boolean
     contractAddress?: `0x${string}`
     isTrbtcJar?: boolean
+    isPyusdJar?: boolean
+    isPyusdUpiJar?: boolean
     // simulation bookkeeping: last simulated day when a period was paid
     lastSimDayPaid?: number
 }
@@ -84,6 +91,16 @@ export function Jars() {
     const [trbtcTarget, setTrbtcTarget] = useState('0.01')
     const [trbtcTopup, setTrbtcTopup] = useState('0.001')
 
+    // PYUSD modal fields
+    const [pyusdOpen, setPyusdOpen] = useState(false)
+    const [pyusdUpiOpen, setPyusdUpiOpen] = useState(false)
+    const [pyusdName, setPyusdName] = useState('PYUSD Jar')
+    const [pyusdTarget, setPyusdTarget] = useState('100')
+    const [pyusdTopup, setPyusdTopup] = useState('10')
+    const [pyusdUpiName, setPyusdUpiName] = useState('UPI PYUSD Jar')
+    const [pyusdUpiTarget, setPyusdUpiTarget] = useState('100')
+    const [pyusdUpiTopup, setPyusdUpiTopup] = useState('850') // INR amount
+
     const [upiJarId, setUpiJarId] = useState<string | null>(null)
 
     // Load jars when wallet connects, clear when disconnects
@@ -146,6 +163,18 @@ export function Jars() {
         }
     }
 
+    async function ensureSepoliaTestnet() {
+        const eth = (window as any)?.ethereum
+        if (!eth?.request) return
+        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0xaa36a7' }] }) } catch (e: any) {
+            const needsAdd = e?.code === 4902 || /Unrecognized chain/i.test(e?.message || '')
+            if (needsAdd) {
+                await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: '0xaa36a7', chainName: 'Sepolia Testnet', nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }, rpcUrls: ['https://rpc.sepolia.org'], blockExplorerUrls: ['https://sepolia.etherscan.io'] }] })
+                await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0xaa36a7' }] })
+            }
+        }
+    }
+
     async function onCreateTrbtcJar() {
         setFormError(null)
         const nameVal = trbtcName.trim() || 'tRBTC Jar'
@@ -176,6 +205,107 @@ export function Jars() {
                 writeJarsFor(address, updatedJars)
             }
             setTrbtcOpen(false)
+        } catch (e: any) { setFormError(e?.message || String(e)) } finally { setCreating(false) }
+    }
+
+    async function onCreatePyusdJar() {
+        setFormError(null)
+        const nameVal = pyusdName.trim() || 'PYUSD Jar'
+        const targetVal = Number(pyusdTarget)
+        const topupVal = Number(pyusdTopup)
+        if (!Number.isFinite(targetVal) || targetVal <= 0) { setFormError('Enter a valid target (PYUSD).'); return }
+        if (!Number.isFinite(topupVal) || topupVal <= 0) { setFormError('Enter a valid auto top-up (PYUSD).'); return }
+        try {
+            setCreating(true)
+            if (chainId !== 11155111) { await ensureSepoliaTestnet(); try { await switchChainAsync({ chainId: 11155111 }) } catch { } }
+            const wc = await getWalletClient(wagmiConfig, { chainId: 11155111 })
+            if (!wc) { setFormError('Wallet not ready.'); setCreating(false); return }
+            const owner = (await wc.getAddresses())[0]
+            // Convert PYUSD to wei (6 decimals)
+            const targetUnits = BigInt(Math.round(targetVal * 10 ** 6))
+            const recurringUnits = BigInt(Math.round(topupVal * 10 ** 6))
+            const periodIndex = cadence === 'daily' ? 0 : (cadence === 'weekly' ? 1 : 2)
+            const hash = await wc.deployContract({
+                abi: PiggyJarPYUSDAbi as any,
+                bytecode: PiggyJarPYUSDBytecode as Hex,
+                args: [owner, nameVal, periodIndex, recurringUnits, targetUnits, PYUSD_ADDRESS_SEPOLIA],
+                account: owner
+            })
+            const receipt = await publicClient!.waitForTransactionReceipt({ hash })
+            const addr = receipt.contractAddress as `0x${string}` | undefined
+            if (!addr) throw new Error('No address')
+            const newJar: Jar = {
+                id: Math.random().toString(36).slice(2),
+                name: nameVal,
+                targetTrbtc: targetVal,
+                thresholdTrbtc: targetVal,
+                recurringTrbtc: topupVal,
+                cadence,
+                depositedTrbtc: 0,
+                status: 'filling',
+                isDeployed: true,
+                contractAddress: addr,
+                isPyusdJar: true
+            }
+            const updatedJars = [newJar, ...jars]
+            setJars(updatedJars)
+            // IMMEDIATELY save to localStorage
+            if (address) {
+                console.log('IMMEDIATE SAVE: Saving new PYUSD jar for address:', address)
+                writeJarsFor(address, updatedJars)
+            }
+            setPyusdOpen(false)
+        } catch (e: any) { setFormError(e?.message || String(e)) } finally { setCreating(false) }
+    }
+
+    async function onCreatePyusdUpiJar() {
+        setFormError(null)
+        const nameVal = pyusdUpiName.trim() || 'UPI PYUSD Jar'
+        const targetVal = Number(pyusdUpiTarget)
+        const topupInrVal = Number(pyusdUpiTopup)
+        const topupPyusdVal = topupInrVal / INR_PER_PYUSD // Convert INR to PYUSD
+        if (!Number.isFinite(targetVal) || targetVal <= 0) { setFormError('Enter a valid target (PYUSD).'); return }
+        if (!Number.isFinite(topupInrVal) || topupInrVal <= 0) { setFormError('Enter a valid auto top-up (INR).'); return }
+        try {
+            setCreating(true)
+            if (chainId !== 11155111) { await ensureSepoliaTestnet(); try { await switchChainAsync({ chainId: 11155111 }) } catch { } }
+            const wc = await getWalletClient(wagmiConfig, { chainId: 11155111 })
+            if (!wc) { setFormError('Wallet not ready.'); setCreating(false); return }
+            const owner = (await wc.getAddresses())[0]
+            // Convert PYUSD to wei (6 decimals)
+            const targetUnits = BigInt(Math.round(targetVal * 10 ** 6))
+            const recurringUnits = BigInt(Math.round(topupPyusdVal * 10 ** 6))
+            const periodIndex = cadence === 'daily' ? 0 : (cadence === 'weekly' ? 1 : 2)
+            const hash = await wc.deployContract({
+                abi: PiggyJarPYUSDUPIAbi as any,
+                bytecode: PiggyJarPYUSDUPIBytecode as Hex,
+                args: [owner, nameVal, periodIndex, recurringUnits, targetUnits, PYUSD_ADDRESS_SEPOLIA],
+                account: owner
+            })
+            const receipt = await publicClient!.waitForTransactionReceipt({ hash })
+            const addr = receipt.contractAddress as `0x${string}` | undefined
+            if (!addr) throw new Error('No address')
+            const newJar: Jar = {
+                id: Math.random().toString(36).slice(2),
+                name: nameVal,
+                targetTrbtc: targetVal,
+                thresholdTrbtc: targetVal,
+                recurringTrbtc: topupPyusdVal,
+                cadence,
+                depositedTrbtc: 0,
+                status: 'filling',
+                isDeployed: true,
+                contractAddress: addr,
+                isPyusdUpiJar: true
+            }
+            const updatedJars = [newJar, ...jars]
+            setJars(updatedJars)
+            // IMMEDIATELY save to localStorage
+            if (address) {
+                console.log('IMMEDIATE SAVE: Saving new UPI PYUSD jar for address:', address)
+                writeJarsFor(address, updatedJars)
+            }
+            setPyusdUpiOpen(false)
         } catch (e: any) { setFormError(e?.message || String(e)) } finally { setCreating(false) }
     }
 
@@ -216,6 +346,67 @@ export function Jars() {
         const owner = (await wc.getAddresses())[0]
 
         const hash = await wc.writeContract({ abi: PiggyJarTRBTCAbi as any, address: jar.contractAddress as `0x${string}`, functionName: 'breakJar', args: [], account: owner })
+        await publicClient!.waitForTransactionReceipt({ hash })
+
+        onBreakJar(jar.id)
+    }
+
+    async function depositPyusd(jar: Jar, amountInPyusd: number) {
+        const wc = await getWalletClient(wagmiConfig, { chainId: 11155111 })
+        if (!wc) throw new Error('Wallet not ready')
+        const owner = (await wc.getAddresses())[0]
+
+        // Convert PYUSD to wei (6 decimals)
+        const amountInWei = BigInt(Math.round(amountInPyusd * 10 ** 6))
+
+        // First approve the jar contract to spend PYUSD
+        const approveHash = await wc.writeContract({
+            abi: ERC20Abi,
+            address: PYUSD_ADDRESS_SEPOLIA as `0x${string}`,
+            functionName: 'approve',
+            args: [jar.contractAddress as `0x${string}`, amountInWei],
+            account: owner
+        })
+        await publicClient!.waitForTransactionReceipt({ hash: approveHash })
+
+        // Then deposit PYUSD
+        const jarAbi = jar.isPyusdUpiJar ? PiggyJarPYUSDUPIAbi : PiggyJarPYUSDAbi
+        const hash = await wc.writeContract({
+            abi: jarAbi as any,
+            address: jar.contractAddress as `0x${string}`,
+            functionName: 'deposit',
+            args: [amountInWei],
+            account: owner
+        })
+        await publicClient!.waitForTransactionReceipt({ hash })
+
+        setJars(prev => prev.map(j => {
+            if (j.id !== jar.id) return j
+            const newDeposited = (j.depositedTrbtc || 0) + amountInPyusd
+            const filled = newDeposited >= j.targetTrbtc
+            return { ...j, depositedTrbtc: newDeposited, status: filled ? 'filled' : 'filling' }
+        }))
+
+        const updated = jars.find(j => j.id === jar.id)
+        if (updated && (updated.depositedTrbtc + amountInPyusd) >= updated.targetTrbtc) {
+            await breakPyusdJar({ ...updated, depositedTrbtc: updated.depositedTrbtc + amountInPyusd })
+            alert('Jar filled. Funds returned to your wallet.')
+        }
+    }
+
+    async function breakPyusdJar(jar: Jar) {
+        const wc = await getWalletClient(wagmiConfig, { chainId: 11155111 })
+        if (!wc) throw new Error('Wallet not ready')
+        const owner = (await wc.getAddresses())[0]
+
+        const jarAbi = jar.isPyusdUpiJar ? PiggyJarPYUSDUPIAbi : PiggyJarPYUSDAbi
+        const hash = await wc.writeContract({
+            abi: jarAbi as any,
+            address: jar.contractAddress as `0x${string}`,
+            functionName: 'breakJar',
+            args: [],
+            account: owner
+        })
         await publicClient!.waitForTransactionReceipt({ hash })
 
         onBreakJar(jar.id)
@@ -299,7 +490,11 @@ export function Jars() {
             const periods = n.periods || 1
             const amount = (Number(jar.recurringTrbtc) || 0) * periods
             try {
-                await depositTrbtc(jar, amount)
+                if (jar.isPyusdJar || jar.isPyusdUpiJar) {
+                    await depositPyusd(jar, amount)
+                } else {
+                    await depositTrbtc(jar, amount)
+                }
             } catch (e) {
                 // keep the notification if failed
                 return
@@ -357,12 +552,17 @@ export function Jars() {
             )}
             <section style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h2 style={{ fontSize: 20, margin: 0 }}>My Jars</h2>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button onClick={() => setCreateOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <img src="/upi_logo_icon.png" alt="UPI" style={{ width: 16, height: 16, objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                        Create UPI Jar
+                        Create UPI Jar (tRBTC)
+                    </button>
+                    <button onClick={() => setPyusdUpiOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <img src="/upi_logo_icon.png" alt="UPI" style={{ width: 16, height: 16, objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        Create UPI Jar (PYUSD)
                     </button>
                     <button onClick={() => setTrbtcOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#e5e5e5' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Create tRBTC Jar</button>
+                    <button onClick={() => setPyusdOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#e5e5e5' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Create PYUSD Jar</button>
                     <button onClick={clearCurrentJars} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Clear Jars</button>
                 </div>
             </section>
@@ -389,12 +589,19 @@ export function Jars() {
                                 <div style={{ fontSize: 13, marginBottom: 8 }}>
                                     {jar.contractAddress && jar.isTrbtcJar
                                         ? `Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ${(Number(jar.recurringTrbtc) || 0).toFixed(4)} tRBTC`
-                                        : `Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ₹${Math.round((Number(jar.recurringTrbtc) || 0) * INR_PER_RBTC).toLocaleString()}`
+                                        : jar.contractAddress && jar.isPyusdJar
+                                            ? `Target: ${targetVal.toFixed(2)} PYUSD • Auto top-up: ${(Number(jar.recurringTrbtc) || 0).toFixed(2)} PYUSD`
+                                            : jar.contractAddress && jar.isPyusdUpiJar
+                                                ? `Target: ${targetVal.toFixed(2)} PYUSD • Auto top-up: ₹${Math.round((Number(jar.recurringTrbtc) || 0) * INR_PER_PYUSD).toLocaleString()}`
+                                                : `Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ₹${Math.round((Number(jar.recurringTrbtc) || 0) * INR_PER_RBTC).toLocaleString()}`
                                     }
                                 </div>
                                 <div style={{ fontSize: 12, marginBottom: 8 }}>Cadence: {jar.cadence}</div>
                                 <div style={{ fontSize: 13, marginBottom: 8 }}>
-                                    {`${deposited.toFixed(4)} / ${targetVal.toFixed(4)} tRBTC (${pct}%)`}
+                                    {jar.isPyusdJar || jar.isPyusdUpiJar
+                                        ? `${deposited.toFixed(2)} / ${targetVal.toFixed(2)} PYUSD (${pct}%)`
+                                        : `${deposited.toFixed(4)} / ${targetVal.toFixed(4)} tRBTC (${pct}%)`
+                                    }
                                 </div>
                                 <div style={{ height: 8, border: '1px solid #000', background: barTrack, marginBottom: 12 }}>
                                     <div style={{ height: '100%', width: `${pct}%`, background: barBg }} />
@@ -408,9 +615,31 @@ export function Jars() {
                                     {jar.contractAddress ? (
                                         <>
                                             {canTopUp && (
-                                                <button onClick={() => depositTrbtc(jar, Number(jar.recurringTrbtc) || 0)} style={{ padding: '6px 12px', border: '1px solid #000', background: filled ? '#fff' : '#000', color: filled ? '#000' : '#fff', cursor: 'pointer' }}>Pay tRBTC</button>
+                                                <button
+                                                    onClick={() => {
+                                                        if (jar.isPyusdJar || jar.isPyusdUpiJar) {
+                                                            depositPyusd(jar, Number(jar.recurringTrbtc) || 0)
+                                                        } else {
+                                                            depositTrbtc(jar, Number(jar.recurringTrbtc) || 0)
+                                                        }
+                                                    }}
+                                                    style={{ padding: '6px 12px', border: '1px solid #000', background: filled ? '#fff' : '#000', color: filled ? '#000' : '#fff', cursor: 'pointer' }}
+                                                >
+                                                    {jar.isPyusdJar || jar.isPyusdUpiJar ? 'Pay PYUSD' : 'Pay tRBTC'}
+                                                </button>
                                             )}
-                                            <button onClick={() => breakTrbtcJar(jar)} style={{ padding: '6px 12px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Break Jar</button>
+                                            <button
+                                                onClick={() => {
+                                                    if (jar.isPyusdJar || jar.isPyusdUpiJar) {
+                                                        breakPyusdJar(jar)
+                                                    } else {
+                                                        breakTrbtcJar(jar)
+                                                    }
+                                                }}
+                                                style={{ padding: '6px 12px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}
+                                            >
+                                                Break Jar
+                                            </button>
                                         </>
                                     ) : (
                                         <>
@@ -488,6 +717,96 @@ export function Jars() {
                                 <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                                     {creating ? 'Creating...' : 'Create tRBTC Jar'}
                                     <img src="/rootstock_logo.png" alt="Rootstock" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {pyusdOpen && (
+                <div onClick={() => setPyusdOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div onClick={e => e.stopPropagation()} style={{ width: 600, background: '#fff', color: '#000', border: '1px solid #000', padding: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <h3 style={{ margin: 0 }}>Create PYUSD Jar</h3>
+                            <button onClick={() => setPyusdOpen(false)} style={{ border: '1px solid #000', background: '#fff', color: '#000', padding: '4px 8px', cursor: 'pointer' }}>Close</button>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); onCreatePyusdJar() }} style={{ marginTop: 12 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span>Jar name</span>
+                                    <input value={pyusdName} onChange={e => setPyusdName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                </label>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span>Target (PYUSD)</span>
+                                    <input value={pyusdTarget} onChange={e => setPyusdTarget(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                </label>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span>Auto top-up (PYUSD)</span>
+                                    <input value={pyusdTopup} onChange={e => setPyusdTopup(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                </label>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span>Recurring period</span>
+                                    <select value={cadence} onChange={e => setCadence(e.target.value as 'daily' | 'weekly' | 'monthly')} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }}>
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                    </select>
+                                </label>
+                            </div>
+                            {formError && (<div style={{ marginTop: 8, color: '#cc0000', fontSize: 12 }}>{formError}</div>)}
+                            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                <button type="button" onClick={() => setPyusdOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
+                                <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                    {creating ? 'Creating...' : 'Create PYUSD Jar'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {pyusdUpiOpen && (
+                <div onClick={() => setPyusdUpiOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div onClick={e => e.stopPropagation()} style={{ width: 600, background: '#fff', color: '#000', border: '1px solid #000', padding: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <h3 style={{ margin: 0 }}>Create UPI PYUSD Jar</h3>
+                            <button onClick={() => setPyusdUpiOpen(false)} style={{ border: '1px solid #000', background: '#fff', color: '#000', padding: '4px 8px', cursor: 'pointer' }}>Close</button>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); onCreatePyusdUpiJar() }} style={{ marginTop: 12 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span>Jar name</span>
+                                    <input value={pyusdUpiName} onChange={e => setPyusdUpiName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                </label>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span>Target (PYUSD)</span>
+                                    <input value={pyusdUpiTarget} onChange={e => setPyusdUpiTarget(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                </label>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span>Auto top-up (INR)</span>
+                                    <input value={pyusdUpiTopup} onChange={e => setPyusdUpiTopup(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                </label>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span>Recurring period</span>
+                                    <select value={cadence} onChange={e => setCadence(e.target.value as 'daily' | 'weekly' | 'monthly')} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }}>
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>Est: ≈{Math.round(Number(pyusdUpiTopup) / INR_PER_PYUSD * 100) / 100} PYUSD per {cadence.slice(0, -2)} payment</div>
+                            {formError && (<div style={{ marginTop: 8, color: '#cc0000', fontSize: 12 }}>{formError}</div>)}
+                            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                <button type="button" onClick={() => setPyusdUpiOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
+                                <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                    {creating ? 'Creating...' : 'Create UPI PYUSD Jar'}
+                                    <img src="/upi_logo_icon.png" alt="UPI" style={{ width: 18, height: 18, objectFit: 'contain' }} />
                                 </button>
                             </div>
                         </form>
