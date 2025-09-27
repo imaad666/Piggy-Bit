@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useAccount, useChainId, useSwitchChain, usePublicClient } from 'wagmi'
 import type { Hex } from 'viem'
 import { PiggyJarTRBTCAbi, PiggyJarTRBTCBytecode } from '../contracts/PiggyJarTRBTC'
@@ -6,6 +6,7 @@ import { getWalletClient } from 'wagmi/actions'
 import { config as wagmiConfig } from '../wagmi'
 
 // tRBTC jar functionality
+const INR_PER_RBTC = 9720986 // Mock exchange rate: 1 RBTC = 1 BTC ≈ ₹9.7M INR (Dec 2024)
 
 export type Jar = {
     id: string
@@ -56,6 +57,18 @@ export function Jars() {
     const [cadence, setCadence] = useState<'daily' | 'weekly' | 'monthly'>('daily')
     const [creating, setCreating] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
+
+    // Calculate estimated time to fill for UPI jars
+    const etaText = useMemo(() => {
+        const targetVal = Number(target) // RBTC
+        const recurringVal = Number(recurring) // RBTC (converted from INR input)
+        if (!Number.isFinite(targetVal) || targetVal <= 0 || !Number.isFinite(recurringVal) || recurringVal <= 0) return ''
+        const periodsToFill = Math.ceil(targetVal / recurringVal)
+        const unit = cadence === 'daily' ? 'day' : cadence === 'weekly' ? 'week' : 'month'
+        const unitPlural = periodsToFill === 1 ? unit : unit + 's'
+        const inrAmount = Math.round(recurringVal * INR_PER_RBTC)
+        return `Est: ${periodsToFill} ${unitPlural} to fill (₹${inrAmount.toLocaleString()} per ${unit})`
+    }, [target, recurring, cadence])
 
     // Simulation time and notifications
     const [simDay, setSimDay] = useState<number>(() => {
@@ -214,8 +227,8 @@ export function Jars() {
         setFormError(null)
         const targetTrbtc = Number(target)
         const recurringTrbtc = Number(recurring)
-        if (!Number.isFinite(targetTrbtc) || targetTrbtc <= 0) { setFormError('Enter a valid target (tRBTC).'); return }
-        if (!Number.isFinite(recurringTrbtc) || recurringTrbtc <= 0) { setFormError('Enter a valid recurring amount (tRBTC).'); return }
+        if (!Number.isFinite(targetTrbtc) || targetTrbtc <= 0) { setFormError('Enter a valid target (RBTC).'); return }
+        if (!Number.isFinite(recurringTrbtc) || recurringTrbtc <= 0) { setFormError('Enter a valid recurring amount (INR).'); return }
         try {
             setCreating(true)
             if (chainId !== 31) { await ensureRskTestnet(); try { await switchChainAsync({ chainId: 31 }) } catch { } }
@@ -374,7 +387,10 @@ export function Jars() {
                                     <span style={{ fontSize: 12 }}>{jar.status.toUpperCase()}</span>
                                 </div>
                                 <div style={{ fontSize: 13, marginBottom: 8 }}>
-                                    {`Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ${(Number(jar.recurringTrbtc) || 0).toFixed(4)} tRBTC`}
+                                    {jar.contractAddress && jar.isTrbtcJar
+                                        ? `Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ${(Number(jar.recurringTrbtc) || 0).toFixed(4)} tRBTC`
+                                        : `Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ₹${Math.round((Number(jar.recurringTrbtc) || 0) * INR_PER_RBTC).toLocaleString()}`
+                                    }
                                 </div>
                                 <div style={{ fontSize: 12, marginBottom: 8 }}>Cadence: {jar.cadence}</div>
                                 <div style={{ fontSize: 13, marginBottom: 8 }}>
@@ -493,12 +509,12 @@ export function Jars() {
                                     <input value={name} onChange={e => setName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>Target (tRBTC)</span>
+                                    <span>Target (RBTC)</span>
                                     <input value={target} onChange={e => setTarget(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>Auto top-up (tRBTC)</span>
-                                    <input value={recurring} onChange={e => setRecurring(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <span>Auto top-up (INR)</span>
+                                    <input value={Math.round(Number(recurring) * INR_PER_RBTC)} onChange={e => setRecurring(String(Number(e.target.value) / INR_PER_RBTC))} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
@@ -511,6 +527,7 @@ export function Jars() {
                                     </select>
                                 </label>
                             </div>
+                            {etaText && (<div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>{etaText}</div>)}
                             {formError && (<div style={{ marginTop: 8, color: '#cc0000', fontSize: 12 }}>{formError}</div>)}
                             <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                                 <button type="button" onClick={() => setCreateOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
@@ -533,7 +550,7 @@ export function Jars() {
                                 <button onClick={closeUpi} style={{ border: '1px solid #000', background: filled ? '#000' : '#fff', color: filled ? '#fff' : '#000', padding: '4px 8px', cursor: 'pointer' }}>Close</button>
                             </div>
                             <div style={{ marginTop: 12 }}>Jar: <strong>{jar?.name}</strong></div>
-                            <div style={{ marginTop: 8 }}>Amount: <strong>{amtTrbtc.toFixed(4)} tRBTC</strong></div>
+                            <div style={{ marginTop: 8 }}>Amount: <strong>₹{Math.round(amtTrbtc * INR_PER_RBTC).toLocaleString()}</strong></div>
                             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
                                 <button onClick={() => payUpi(upiJarId)} style={{ padding: '8px 14px', border: '1px solid #000', background: filled ? '#fff' : '#000', color: filled ? '#000' : '#fff', cursor: 'pointer' }}>Pay</button>
                             </div>
