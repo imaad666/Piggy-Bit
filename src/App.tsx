@@ -3,7 +3,6 @@ import { useAccount, useConnect } from 'wagmi'
 import './App.css'
 import { Header } from './components/Header'
 import { Jars } from './components/Jars'
-import { AgentChat } from './components/AgentChat'
 import { PythPriceFeeds } from './components/PythPriceFeeds'
 
 function App() {
@@ -35,9 +34,6 @@ function App() {
       )}
       <main style={{ flex: 1 }}>
         <Jars />
-        <div style={{ maxWidth: 900, width: '100%', margin: '0 auto', padding: '0 24px' }}>
-          <AgentChat />
-        </div>
         <div style={{ maxWidth: 900, width: '100%', margin: '0 auto', padding: '0 24px' }}>
           <PythPriceFeeds />
         </div>

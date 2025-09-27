@@ -135,25 +135,6 @@ export function Jars() {
     useEffect(() => { try { localStorage.setItem('piggybit:simDay', String(simDay)) } catch { } }, [simDay])
     useEffect(() => { try { localStorage.setItem('piggybit:notifications', JSON.stringify(notifications)) } catch { } }, [notifications])
 
-    // expose prefill helpers for AgentChat
-    useEffect(() => {
-        (window as any).piggybit = {
-            openCreateJarPrefill: (params: { name: string; targetTrbtc: number; autoTopupTrbtc: number; period: 'daily' | 'weekly' | 'monthly' }) => {
-                setName(params.name || 'Jar')
-                setTarget(String(Math.max(0.001, params.targetTrbtc)))
-                setRecurring(String(Math.max(0.001, params.autoTopupTrbtc)))
-                setCadence(params.period)
-                setCreateOpen(true)
-            },
-            openCreateTrbtcJarPrefill: (params: { name: string; targetTrbtc: number; autoTopupTrbtc: number; period: 'daily' | 'weekly' | 'monthly' }) => {
-                setTrbtcName(params.name || 'tRBTC Jar')
-                setTrbtcTarget(String(Math.max(0.001, params.targetTrbtc)))
-                setTrbtcTopup(String(Math.max(0.001, params.autoTopupTrbtc)))
-                setCadence(params.period)
-                setTrbtcOpen(true)
-            },
-        }
-    }, [])
 
 
     async function ensureRskTestnet() {
