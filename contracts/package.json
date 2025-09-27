@@ -4,8 +4,9 @@
     "private": true,
     "scripts": {
         "build": "hardhat compile",
-        "deploy:testnet": "hardhat run scripts/deploy.ts --network rskTestnet",
-        "deploy:mainnet": "hardhat run scripts/deploy.ts --network rskMainnet"
+        "deploy:rsk-testnet": "hardhat run scripts/deploy.ts --network rskTestnet",
+        "deploy:rsk-mainnet": "hardhat run scripts/deploy.ts --network rskMainnet",
+        "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia"
     },
     "devDependencies": {
         "@nomicfoundation/hardhat-ethers": "^4.0.1",

@@ -1,9 +1,0 @@
-{
-  "projects": [
-    {
-      "name": "piggy-bit",
-      "source": "piggy-bit",
-      "framework": "vite"
-    }
-  ]
-}

@@ -19,7 +19,7 @@ contract PiggyJarPYUSD is ReentrancyGuard {
     string public name; // jar name
     IERC20 public immutable pyusd; // PYUSD token contract
 
-    // Savings goal and progress (in PYUSD wei, 6 decimals)
+    // Savings goal and progress (in PYUSD wei - 6 decimals)
     uint256 public targetAmount;      // optional; 0 means no cap
     uint256 public totalDeposited;    // cumulative deposited amount
     bool public filled;               // true once target reached
@@ -27,32 +27,23 @@ contract PiggyJarPYUSD is ReentrancyGuard {
     // Optional scheduling meta (UI/off-chain automation hint)
     // period: 0=Daily, 1=Weekly, 2=Monthly
     uint8 public period;              // default 0 (Daily) unless set
-    uint256 public recurringAmount;   // suggested per-period deposit amount (in PYUSD)
+    uint256 public recurringAmount;   // suggested per-period deposit amount
 
     modifier onlyOwner() {
         require(msg.sender == owner, "not owner");
         _;
     }
 
-    constructor(
-        address _owner, 
-        string memory _name, 
-        uint8 _period, 
-        uint256 _recurringAmount, 
-        uint256 _targetAmount,
-        address _pyusdAddress
-    ) {
+    constructor(address _owner, string memory _name, uint8 _period, uint256 _recurringAmount, uint256 _targetAmount, address _pyusd) {
         require(_owner != address(0), "owner");
-        require(_pyusdAddress != address(0), "pyusd address");
+        require(_pyusd != address(0), "pyusd");
         owner = _owner;
         name = _name;
-        pyusd = IERC20(_pyusdAddress);
-        
+        pyusd = IERC20(_pyusd);
         // initialize schedule
         period = _period;
         recurringAmount = _recurringAmount;
         emit ScheduleSet(_period, _recurringAmount);
-        
         // optional target
         if (_targetAmount > 0) {
             targetAmount = _targetAmount;
@@ -86,9 +77,7 @@ contract PiggyJarPYUSD is ReentrancyGuard {
             require(amount <= remaining, "exceeds target");
         }
 
-        // Transfer PYUSD from owner to this contract
-        pyusd.safeTransferFrom(owner, address(this), amount);
-
+        pyusd.safeTransferFrom(msg.sender, address(this), amount);
         totalDeposited += amount;
         emit Deposited(msg.sender, amount);
 

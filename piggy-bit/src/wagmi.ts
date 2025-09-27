@@ -16,17 +16,17 @@ export const rootstockTestnet = {
     },
 } as const
 
-// Ethereum Sepolia testnet chain definition
+// Sepolia testnet chain definition
 export const sepoliaTestnet = {
     id: 11155111,
-    name: 'Sepolia Testnet',
-    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+    name: 'Sepolia',
+    nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
     rpcUrls: {
         default: { http: ['https://rpc.sepolia.org'] },
         public: { http: ['https://rpc.sepolia.org'] },
     },
     blockExplorers: {
-        default: { name: 'Sepolia Etherscan', url: 'https://sepolia.etherscan.io' },
+        default: { name: 'Etherscan', url: 'https://sepolia.etherscan.io' },
     },
 } as const
 
@@ -42,9 +42,4 @@ export const config = createConfig({
 export const client = createClient({
     chain: rootstockTestnet,
     transport: http('https://public-node.testnet.rsk.co'),
-})
-
-export const sepoliaClient = createClient({
-    chain: sepoliaTestnet,
-    transport: http('https://rpc.sepolia.org'),
 })

@@ -44,7 +44,7 @@ function App() {
       </main>
       <footer style={{ borderTop: '1px solid #000', padding: '12px 24px', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontWeight: 600 }}>Piggy Bit</div>
-        <div style={{ opacity: 0.9 }}>Uses Rootstock • Pyth • Made for ETHGlobal Delhi</div>
+        <div style={{ opacity: 0.9 }}>Uses Rootstock • Sepolia • PYUSD • Pyth • Made for ETHGlobal Delhi</div>
       </footer>
     </div>
   )
