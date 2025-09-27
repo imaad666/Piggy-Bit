@@ -1,5 +1,0 @@
-{
-    "buildCommand": "cd piggy-bit && npm install && npm run build",
-    "outputDirectory": "piggy-bit/dist",
-    "framework": "vite"
-}
