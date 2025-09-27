@@ -323,34 +323,53 @@ export function Jars() {
     }
 
     async function depositTrbtc(jar: Jar, amountInTrbtc: number) {
-        const wc = await getWalletClient(wagmiConfig, { chainId: 31 })
-        if (!wc) throw new Error('Wallet not ready')
-        const owner = (await wc.getAddresses())[0]
-        // Convert tRBTC to wei (18 decimals)
-        const amountInWei = BigInt(Math.round(amountInTrbtc * 10 ** 18))
+        try {
+            console.log('Starting tRBTC deposit...', { jarId: jar.id, amount: amountInTrbtc })
+            const wc = await getWalletClient(wagmiConfig, { chainId: 31 })
+            if (!wc) throw new Error('Wallet not ready')
+            const owner = (await wc.getAddresses())[0]
+            // Convert tRBTC to wei (18 decimals)
+            const amountInWei = BigInt(Math.round(amountInTrbtc * 10 ** 18))
 
-        const hash = await wc.writeContract({
-            abi: PiggyJarTRBTCAbi as any,
-            address: jar.contractAddress as `0x${string}`,
-            functionName: 'deposit',
-            args: [],
-            account: owner,
-            value: amountInWei,
-            chain: rootstockTestnet
-        })
-        await rootstockPublicClient.waitForTransactionReceipt({ hash })
+            console.log('Submitting tRBTC deposit transaction...')
+            const hash = await wc.writeContract({
+                abi: PiggyJarTRBTCAbi as any,
+                address: jar.contractAddress as `0x${string}`,
+                functionName: 'deposit',
+                args: [],
+                account: owner,
+                value: amountInWei,
+                chain: rootstockTestnet
+            })
+            
+            console.log('Waiting for tRBTC transaction receipt...', hash)
+            await rootstockPublicClient.waitForTransactionReceipt({ hash })
+            console.log('tRBTC deposit successful!')
 
-        setJars(prev => prev.map(j => {
-            if (j.id !== jar.id) return j
-            const newDeposited = (j.depositedTrbtc || 0) + amountInTrbtc
-            const filled = newDeposited >= j.targetTrbtc
-            return { ...j, depositedTrbtc: newDeposited, status: filled ? 'filled' : 'filling' }
-        }))
+            setJars(prev => {
+                const updated = prev.map(j => {
+                    if (j.id !== jar.id) return j
+                    const newDeposited = (j.depositedTrbtc || 0) + amountInTrbtc
+                    const filled = newDeposited >= j.targetTrbtc
+                    console.log('Updating jar state:', { jarId: j.id, newDeposited, filled })
+                    return { ...j, depositedTrbtc: newDeposited, status: (filled ? 'filled' : 'filling') as 'filled' | 'filling' | 'broken' }
+                })
+                // Save updated jars to localStorage immediately
+                if (address) {
+                    writeJarsFor(address, updated)
+                }
+                return updated
+            })
 
-        const updated = jars.find(j => j.id === jar.id)
-        if (updated && (updated.depositedTrbtc + amountInTrbtc) >= updated.targetTrbtc) {
-            await breakTrbtcJar({ ...updated, depositedTrbtc: updated.depositedTrbtc + amountInTrbtc })
-            alert('Jar filled. Funds returned to your wallet.')
+            const updated = jars.find(j => j.id === jar.id)
+            if (updated && (updated.depositedTrbtc + amountInTrbtc) >= updated.targetTrbtc) {
+                console.log('Jar filled, breaking jar...')
+                await breakTrbtcJar({ ...updated, depositedTrbtc: updated.depositedTrbtc + amountInTrbtc })
+                alert('Jar filled. Funds returned to your wallet.')
+            }
+        } catch (error) {
+            console.error('tRBTC deposit failed:', error)
+            alert(`Deposit failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
     }
 
@@ -366,47 +385,68 @@ export function Jars() {
     }
 
     async function depositPyusd(jar: Jar, amountInPyusd: number) {
-        const wc = await getWalletClient(wagmiConfig, { chainId: 11155111 })
-        if (!wc) throw new Error('Wallet not ready')
-        const owner = (await wc.getAddresses())[0]
+        try {
+            console.log('Starting PYUSD deposit...', { jarId: jar.id, amount: amountInPyusd })
+            const wc = await getWalletClient(wagmiConfig, { chainId: 11155111 })
+            if (!wc) throw new Error('Wallet not ready')
+            const owner = (await wc.getAddresses())[0]
+            
+            // Convert PYUSD to wei (6 decimals)
+            const amountInWei = BigInt(Math.round(amountInPyusd * 10 ** 6))
 
-        // Convert PYUSD to wei (6 decimals)
-        const amountInWei = BigInt(Math.round(amountInPyusd * 10 ** 6))
+            console.log('Approving PYUSD spend...')
+            // First approve the jar contract to spend PYUSD
+            const approveHash = await wc.writeContract({
+                abi: ERC20Abi,
+                address: PYUSD_ADDRESS_SEPOLIA as `0x${string}`,
+                functionName: 'approve',
+                args: [jar.contractAddress as `0x${string}`, amountInWei],
+                account: owner,
+                chain: sepoliaTestnet
+            })
+            await sepoliaPublicClient.waitForTransactionReceipt({ hash: approveHash })
+            console.log('PYUSD approval successful!')
 
-        // First approve the jar contract to spend PYUSD
-        const approveHash = await wc.writeContract({
-            abi: ERC20Abi,
-            address: PYUSD_ADDRESS_SEPOLIA as `0x${string}`,
-            functionName: 'approve',
-            args: [jar.contractAddress as `0x${string}`, amountInWei],
-            account: owner,
-            chain: sepoliaTestnet
-        })
-        await sepoliaPublicClient.waitForTransactionReceipt({ hash: approveHash })
+            console.log('Submitting PYUSD deposit transaction...')
+            // Then deposit PYUSD
+            const jarAbi = jar.isPyusdUpiJar ? PiggyJarPYUSDUPIAbi : PiggyJarPYUSDAbi
+            const hash = await wc.writeContract({
+                abi: jarAbi as any,
+                address: jar.contractAddress as `0x${string}`,
+                functionName: 'deposit',
+                args: [amountInWei],
+                account: owner,
+                chain: sepoliaTestnet
+            })
+            
+            console.log('Waiting for PYUSD transaction receipt...', hash)
+            await sepoliaPublicClient.waitForTransactionReceipt({ hash })
+            console.log('PYUSD deposit successful!')
 
-        // Then deposit PYUSD
-        const jarAbi = jar.isPyusdUpiJar ? PiggyJarPYUSDUPIAbi : PiggyJarPYUSDAbi
-        const hash = await wc.writeContract({
-            abi: jarAbi as any,
-            address: jar.contractAddress as `0x${string}`,
-            functionName: 'deposit',
-            args: [amountInWei],
-            account: owner,
-            chain: sepoliaTestnet
-        })
-        await sepoliaPublicClient.waitForTransactionReceipt({ hash })
+            setJars(prev => {
+                const updated = prev.map(j => {
+                    if (j.id !== jar.id) return j
+                    const newDeposited = (j.depositedTrbtc || 0) + amountInPyusd
+                    const filled = newDeposited >= j.targetTrbtc
+                    console.log('Updating PYUSD jar state:', { jarId: j.id, newDeposited, filled })
+                    return { ...j, depositedTrbtc: newDeposited, status: (filled ? 'filled' : 'filling') as 'filled' | 'filling' | 'broken' }
+                })
+                // Save updated jars to localStorage immediately
+                if (address) {
+                    writeJarsFor(address, updated)
+                }
+                return updated
+            })
 
-        setJars(prev => prev.map(j => {
-            if (j.id !== jar.id) return j
-            const newDeposited = (j.depositedTrbtc || 0) + amountInPyusd
-            const filled = newDeposited >= j.targetTrbtc
-            return { ...j, depositedTrbtc: newDeposited, status: filled ? 'filled' : 'filling' }
-        }))
-
-        const updated = jars.find(j => j.id === jar.id)
-        if (updated && (updated.depositedTrbtc + amountInPyusd) >= updated.targetTrbtc) {
-            await breakPyusdJar({ ...updated, depositedTrbtc: updated.depositedTrbtc + amountInPyusd })
-            alert('Jar filled. Funds returned to your wallet.')
+            const updated = jars.find(j => j.id === jar.id)
+            if (updated && (updated.depositedTrbtc + amountInPyusd) >= updated.targetTrbtc) {
+                console.log('PYUSD jar filled, breaking jar...')
+                await breakPyusdJar({ ...updated, depositedTrbtc: updated.depositedTrbtc + amountInPyusd })
+                alert('Jar filled. Funds returned to your wallet.')
+            }
+        } catch (error) {
+            console.error('PYUSD deposit failed:', error)
+            alert(`PYUSD deposit failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
     }
 
