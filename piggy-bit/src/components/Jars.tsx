@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAccount, useChainId, useSwitchChain, usePublicClient } from 'wagmi'
 import type { Hex } from 'viem'
 import { PiggyJarTRBTCAbi, PiggyJarTRBTCBytecode } from '../contracts/PiggyJarTRBTC'
@@ -103,10 +103,10 @@ export function Jars() {
     // expose prefill helpers for AgentChat
     useEffect(() => {
         (window as any).piggybit = {
-            openCreateJarPrefill: (params: { name: string; targetUsd: number; autoTopupInr: number; period: 'daily' | 'weekly' | 'monthly' }) => {
+            openCreateJarPrefill: (params: { name: string; targetTrbtc: number; autoTopupTrbtc: number; period: 'daily' | 'weekly' | 'monthly' }) => {
                 setName(params.name || 'Jar')
-                setTarget(String(Math.max(1, Math.floor(params.targetUsd))))
-                setRecurring(String(Math.max(1, Math.floor(params.autoTopupInr))))
+                setTarget(String(Math.max(0.001, params.targetTrbtc)))
+                setRecurring(String(Math.max(0.001, params.autoTopupTrbtc)))
                 setCadence(params.period)
                 setCreateOpen(true)
             },
@@ -120,15 +120,6 @@ export function Jars() {
         }
     }, [])
 
-    const etaText = useMemo(() => {
-        const targetTrbtcNum = Number(target)
-        const topupTrbtc = Number(recurring)
-        if (!Number.isFinite(targetTrbtcNum) || !Number.isFinite(topupTrbtc) || targetTrbtcNum <= 0 || topupTrbtc <= 0) return ''
-        const periodsNeeded = Math.ceil(targetTrbtcNum / topupTrbtc)
-        const periodDays = cadence === 'daily' ? 1 : cadence === 'weekly' ? 7 : 30
-        const days = periodsNeeded * periodDays
-        return `Est. to fill: ~${days} days`
-    }, [target, recurring, cadence])
 
     async function ensureRskTestnet() {
         const eth = (window as any)?.ethereum
@@ -254,7 +245,6 @@ export function Jars() {
     function onSimulateDeposit(jarId: string, amountInTrbtc: number) {
         setJars(prev => prev.map(j => {
             if (j.id !== jarId) return j;
-            if (j.isTrbtcJar) return j;
             const depositedTrbtc = (Number(j.depositedTrbtc) || 0) + amountInTrbtc;
             const filled = depositedTrbtc >= j.targetTrbtc;
             return { ...j, depositedTrbtc, status: filled ? 'filled' : 'filling' }
@@ -292,8 +282,7 @@ export function Jars() {
     async function settleNotification(n: Notification) {
         const jar = jars.find(j => j.id === n.jarId)
         if (!jar) { setNotifications(prev => prev.filter(x => x.id !== n.id)); return }
-        if (jar.isTrbtcJar) {
-            if (!jar.contractAddress) { setNotifications(prev => prev.filter(x => x.id !== n.id)); return }
+        if (jar.contractAddress) {
             const periods = n.periods || 1
             const amount = (Number(jar.recurringTrbtc) || 0) * periods
             try {
@@ -356,7 +345,10 @@ export function Jars() {
             <section style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h2 style={{ fontSize: 20, margin: 0 }}>My Jars</h2>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => setCreateOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Create Jar</button>
+                    <button onClick={() => setCreateOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <img src="/upi_logo_icon.png" alt="UPI" style={{ width: 16, height: 16, objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        Create UPI Jar
+                    </button>
                     <button onClick={() => setTrbtcOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#e5e5e5' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Create tRBTC Jar</button>
                     <button onClick={clearCurrentJars} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Clear Jars</button>
                 </div>
@@ -367,8 +359,8 @@ export function Jars() {
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
                     {activeJars.map(jar => {
-                        const deposited = Number(jar.depositedTrbtc || jar.depositedUsd) || 0
-                        const targetVal = Number(jar.targetTrbtc || jar.targetUsd) || 0
+                        const deposited = Number(jar.depositedTrbtc) || 0
+                        const targetVal = Number(jar.targetTrbtc) || 0
                         const pct = targetVal > 0 ? Math.min(100, Math.round((deposited / targetVal) * 100)) : 0
                         const filled = jar.status === 'filled'
                         const cardStyle: React.CSSProperties = filled ? { border: '1px solid #000', padding: 16, background: '#000', color: '#fff' } : { border: '1px solid #000', padding: 16, background: '#fff', color: '#000' }
@@ -382,7 +374,7 @@ export function Jars() {
                                     <span style={{ fontSize: 12 }}>{jar.status.toUpperCase()}</span>
                                 </div>
                                 <div style={{ fontSize: 13, marginBottom: 8 }}>
-                                    {`Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ${(Number(jar.recurringTrbtc || jar.recurringUsd) || 0).toFixed(4)} tRBTC`}
+                                    {`Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ${(Number(jar.recurringTrbtc) || 0).toFixed(4)} tRBTC`}
                                 </div>
                                 <div style={{ fontSize: 12, marginBottom: 8 }}>Cadence: {jar.cadence}</div>
                                 <div style={{ fontSize: 13, marginBottom: 8 }}>
@@ -397,10 +389,10 @@ export function Jars() {
                                     </div>
                                 )}
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                    {jar.isTrbtcJar ? (
+                                    {jar.contractAddress ? (
                                         <>
                                             {canTopUp && (
-                                                <button onClick={() => depositTrbtc(jar, Number(jar.recurringTrbtc || jar.recurringUsd) || 0)} style={{ padding: '6px 12px', border: '1px solid #000', background: filled ? '#fff' : '#000', color: filled ? '#000' : '#fff', cursor: 'pointer' }}>Pay tRBTC</button>
+                                                <button onClick={() => depositTrbtc(jar, Number(jar.recurringTrbtc) || 0)} style={{ padding: '6px 12px', border: '1px solid #000', background: filled ? '#fff' : '#000', color: filled ? '#000' : '#fff', cursor: 'pointer' }}>Pay tRBTC</button>
                                             )}
                                             <button onClick={() => breakTrbtcJar(jar)} style={{ padding: '6px 12px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Break Jar</button>
                                         </>
@@ -431,7 +423,7 @@ export function Jars() {
                                     <strong>{jar.name}</strong>
                                     <span style={{ fontSize: 12 }}>BROKEN</span>
                                 </div>
-                                <div style={{ fontSize: 13, marginBottom: 8 }}>Target: {(Number(jar.targetTrbtc || jar.targetUsd) || 0).toFixed(4)} tRBTC</div>
+                                <div style={{ fontSize: 13, marginBottom: 8 }}>Target: {(Number(jar.targetTrbtc) || 0).toFixed(4)} tRBTC</div>
                                 {jar.contractAddress && (
                                     <div style={{ fontSize: 12, marginBottom: 8 }}>Contract: <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>{jar.contractAddress}</span></div>
                                 )}
@@ -489,25 +481,27 @@ export function Jars() {
 
             {createOpen && (
                 <div onClick={() => setCreateOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div onClick={e => e.stopPropagation()} style={{ width: 760, background: '#fff', color: '#000', border: '1px solid #000', padding: 16 }}>
+                    <div onClick={e => e.stopPropagation()} style={{ width: 600, background: '#fff', color: '#000', border: '1px solid #000', padding: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <h3 style={{ margin: 0 }}>Create Jar</h3>
+                            <h3 style={{ margin: 0 }}>Create UPI Jar</h3>
                             <button onClick={() => setCreateOpen(false)} style={{ border: '1px solid #000', background: '#fff', color: '#000', padding: '4px 8px', cursor: 'pointer' }}>Close</button>
                         </div>
-                        <form onSubmit={onCreate} style={{ marginTop: 12 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+                        <form onSubmit={(e) => { e.preventDefault(); onCreate(e) }} style={{ marginTop: 12 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Jar name</span>
                                     <input value={name} onChange={e => setName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>Target (USDC)</span>
-                                    <input value={target} onChange={e => setTarget(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <span>Target (tRBTC)</span>
+                                    <input value={target} onChange={e => setTarget(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>Auto top-up (₹ INR)</span>
-                                    <input value={recurring} onChange={e => setRecurring(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <span>Auto top-up (tRBTC)</span>
+                                    <input value={recurring} onChange={e => setRecurring(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Recurring period</span>
                                     <select value={cadence} onChange={e => setCadence(e.target.value as 'daily' | 'weekly' | 'monthly')} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }}>
@@ -517,15 +511,10 @@ export function Jars() {
                                     </select>
                                 </label>
                             </div>
-                            {etaText && (<div style={{ marginTop: 8, fontSize: 12 }}>{etaText}</div>)}
                             {formError && (<div style={{ marginTop: 8, color: '#cc0000', fontSize: 12 }}>{formError}</div>)}
-                            <div style={{ marginTop: 8, fontSize: 11, opacity: 0.8 }}>Native tRBTC savings jar</div>
                             <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                                 <button type="button" onClick={() => setCreateOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
-                                <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                    {creating ? 'minting' : 'Mint Jar'}
-                                    <img src="/rootstock_logo.png" alt="Rootstock" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-                                </button>
+                                <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer' }}>{creating ? 'Creating...' : 'Create UPI Jar'}</button>
                             </div>
                         </form>
                     </div>
