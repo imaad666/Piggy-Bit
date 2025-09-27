@@ -434,28 +434,54 @@ export function Jars() {
     function openUpi(jarId: string) { setUpiJarId(jarId) }
     function closeUpi() { setUpiJarId(null) }
     function payUpi(jarId: string) { const jar = jars.find(j => j.id === jarId); if (!jar) return; onSimulateDeposit(jarId, Number(jar.recurringTrbtc) || 0); closeUpi() }
+    
+    function clearAllNotifications() {
+        setNotifications([])
+    }
 
     // Simulation helpers
     function periodDaysFor(c: 'daily' | 'weekly' | 'monthly') { return c === 'daily' ? 1 : c === 'weekly' ? 7 : 30 }
+    
     function advanceSim(days: number) {
         if (days <= 0) return
         const prevDay = simDay
         const nextDay = prevDay + days
         setSimDay(nextDay)
-        setJars(prev => prev.map(j => {
-            if (j.status !== 'filling') return j
-            const pd = periodDaysFor(j.cadence)
-            const lastPaid = j.lastSimDayPaid ?? prevDay
-            const totalPeriodsDue = Math.floor((nextDay - lastPaid) / pd)
-            if (totalPeriodsDue <= 0) return j
-            // create a notification to settle due periods (tRBTC or mock UPI)
-            setNotifications(curr => {
-                // remove any existing notification for this jar to avoid duplicates
-                const filtered = curr.filter(n => n.jarId !== j.id)
-                return [{ id: Math.random().toString(36).slice(2), jarId: j.id, text: `${totalPeriodsDue} ${j.cadence} payment(s) due for ${j.name}`, periods: totalPeriodsDue }, ...filtered]
-            })
-            return { ...j, lastSimDayPaid: lastPaid + totalPeriodsDue * pd }
-        }))
+        
+        // Check each jar for due payments
+        jars.forEach(jar => {
+            if (jar.status !== 'filling') return
+            
+            const periodDays = periodDaysFor(jar.cadence)
+            const lastPaid = jar.lastSimDayPaid ?? 0
+            const daysSinceLastPaid = nextDay - lastPaid
+            
+            if (daysSinceLastPaid >= periodDays) {
+                const periodsDue = Math.floor(daysSinceLastPaid / periodDays)
+                
+                // Create notification for due payments
+                const notificationId = Math.random().toString(36).slice(2)
+                const newNotification: Notification = {
+                    id: notificationId,
+                    jarId: jar.id,
+                    text: `${periodsDue} ${jar.cadence} payment${periodsDue > 1 ? 's' : ''} due for "${jar.name}"`,
+                    periods: periodsDue
+                }
+                
+                setNotifications(prev => {
+                    // Remove existing notification for this jar
+                    const filtered = prev.filter(n => n.jarId !== jar.id)
+                    return [newNotification, ...filtered]
+                })
+                
+                // Update jar's last paid day
+                setJars(prev => prev.map(j => 
+                    j.id === jar.id 
+                        ? { ...j, lastSimDayPaid: lastPaid + periodsDue * periodDays }
+                        : j
+                ))
+            }
+        })
     }
 
     async function settleNotification(n: Notification) {
@@ -502,7 +528,14 @@ export function Jars() {
         <div style={{ padding: '24px', maxWidth: 900, width: '100%', margin: '0 auto' }}>
             {/* Simulation time controls */}
             <section style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 13 }}>Simulated time: <strong>{simDay} day(s)</strong></div>
+                <div style={{ fontSize: 13 }}>
+                    Simulated time: <strong>{simDay} day(s)</strong>
+                    {simDay > 0 && (
+                        <span style={{ marginLeft: 8, color: '#666' }}>
+                            ({Math.floor(simDay / 365)} year{Math.floor(simDay / 365) !== 1 ? 's' : ''}, {Math.floor((simDay % 365) / 30)} month{Math.floor((simDay % 365) / 30) !== 1 ? 's' : ''}, {simDay % 30} day{simDay % 30 !== 1 ? 's' : ''})
+                        </span>
+                    )}
+                </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => advanceSim(1)} style={{ padding: '6px 10px', border: '1px solid #000', background: '#fff', cursor: 'pointer' }}>+1 day</button>
                     <button onClick={() => advanceSim(7)} style={{ padding: '6px 10px', border: '1px solid #000', background: '#fff', cursor: 'pointer' }}>+1 week</button>
@@ -512,7 +545,10 @@ export function Jars() {
             </section>
             {notifications.length > 0 && (
                 <section style={{ marginBottom: 16, border: '1px dashed #000', padding: 12, background: '#fafafa' }}>
-                    <div style={{ fontSize: 14, marginBottom: 8 }}><strong>Notifications</strong></div>
+                    <div style={{ fontSize: 14, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong>Notifications ({notifications.length})</strong>
+                        <button onClick={clearAllNotifications} style={{ padding: '4px 8px', border: '1px solid #000', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Clear All</button>
+                    </div>
                     <div style={{ display: 'grid', gap: 8 }}>
                         {notifications.map(n => {
                             const jar = jars.find(j => j.id === n.jarId)
