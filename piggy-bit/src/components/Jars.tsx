@@ -6,7 +6,7 @@ import { PiggyJarPYUSDAbi, PiggyJarPYUSDBytecode } from '../contracts/PiggyJarPY
 import { PiggyJarPYUSDUPIAbi, PiggyJarPYUSDUPIBytecode } from '../contracts/PiggyJarPYUSDUPI'
 import { ERC20Abi } from '../contracts/erc20'
 import { getWalletClient } from 'wagmi/actions'
-import { config as wagmiConfig } from '../wagmi'
+import { config as wagmiConfig, rootstockTestnet, sepoliaTestnet } from '../wagmi'
 
 // Exchange rates and constants
 const INR_PER_RBTC = 9720986 // Mock exchange rate: 1 RBTC = 1 BTC ≈ ₹9.7M INR (Dec 2024)
@@ -192,7 +192,7 @@ export function Jars() {
             const targetUnits = BigInt(Math.round(targetVal * 10 ** 18))
             const recurringUnits = BigInt(Math.round(topupVal * 10 ** 18))
             const periodIndex = cadence === 'daily' ? 0 : (cadence === 'weekly' ? 1 : 2)
-            const hash = await wc.deployContract({ abi: PiggyJarTRBTCAbi as any, bytecode: PiggyJarTRBTCBytecode as Hex, args: [owner, nameVal, periodIndex, recurringUnits, targetUnits], account: owner })
+            const hash = await wc.deployContract({ abi: PiggyJarTRBTCAbi as any, bytecode: PiggyJarTRBTCBytecode as Hex, args: [owner, nameVal, periodIndex, recurringUnits, targetUnits], account: owner, chain: rootstockTestnet })
             const receipt = await publicClient!.waitForTransactionReceipt({ hash })
             const addr = receipt.contractAddress as `0x${string}` | undefined
             if (!addr) throw new Error('No address')
@@ -229,7 +229,8 @@ export function Jars() {
                 abi: PiggyJarPYUSDAbi as any,
                 bytecode: PiggyJarPYUSDBytecode as Hex,
                 args: [owner, nameVal, periodIndex, recurringUnits, targetUnits, PYUSD_ADDRESS_SEPOLIA],
-                account: owner
+                account: owner,
+                chain: sepoliaTestnet
             })
             const receipt = await publicClient!.waitForTransactionReceipt({ hash })
             const addr = receipt.contractAddress as `0x${string}` | undefined
@@ -280,7 +281,8 @@ export function Jars() {
                 abi: PiggyJarPYUSDUPIAbi as any,
                 bytecode: PiggyJarPYUSDUPIBytecode as Hex,
                 args: [owner, nameVal, periodIndex, recurringUnits, targetUnits, PYUSD_ADDRESS_SEPOLIA],
-                account: owner
+                account: owner,
+                chain: sepoliaTestnet
             })
             const receipt = await publicClient!.waitForTransactionReceipt({ hash })
             const addr = receipt.contractAddress as `0x${string}` | undefined
@@ -322,7 +324,8 @@ export function Jars() {
             functionName: 'deposit',
             args: [],
             account: owner,
-            value: amountInWei
+            value: amountInWei,
+            chain: rootstockTestnet
         })
         await publicClient!.waitForTransactionReceipt({ hash })
 
@@ -345,7 +348,7 @@ export function Jars() {
         if (!wc) throw new Error('Wallet not ready')
         const owner = (await wc.getAddresses())[0]
 
-        const hash = await wc.writeContract({ abi: PiggyJarTRBTCAbi as any, address: jar.contractAddress as `0x${string}`, functionName: 'breakJar', args: [], account: owner })
+        const hash = await wc.writeContract({ abi: PiggyJarTRBTCAbi as any, address: jar.contractAddress as `0x${string}`, functionName: 'breakJar', args: [], account: owner, chain: rootstockTestnet })
         await publicClient!.waitForTransactionReceipt({ hash })
 
         onBreakJar(jar.id)
@@ -365,7 +368,8 @@ export function Jars() {
             address: PYUSD_ADDRESS_SEPOLIA as `0x${string}`,
             functionName: 'approve',
             args: [jar.contractAddress as `0x${string}`, amountInWei],
-            account: owner
+            account: owner,
+            chain: sepoliaTestnet
         })
         await publicClient!.waitForTransactionReceipt({ hash: approveHash })
 
@@ -376,7 +380,8 @@ export function Jars() {
             address: jar.contractAddress as `0x${string}`,
             functionName: 'deposit',
             args: [amountInWei],
-            account: owner
+            account: owner,
+            chain: sepoliaTestnet
         })
         await publicClient!.waitForTransactionReceipt({ hash })
 
@@ -405,7 +410,8 @@ export function Jars() {
             address: jar.contractAddress as `0x${string}`,
             functionName: 'breakJar',
             args: [],
-            account: owner
+            account: owner,
+            chain: sepoliaTestnet
         })
         await publicClient!.waitForTransactionReceipt({ hash })
 
@@ -430,7 +436,7 @@ export function Jars() {
             const targetUnits = BigInt(Math.round(targetTrbtc * 10 ** 18))
             const recurringUnits = BigInt(Math.round(recurringTrbtc * 10 ** 18))
             const periodIndex = cadence === 'daily' ? 0 : (cadence === 'weekly' ? 1 : 2)
-            const hash = await wc.deployContract({ abi: PiggyJarTRBTCAbi as any, bytecode: PiggyJarTRBTCBytecode as Hex, args: [owner, name.trim() || 'tRBTC Jar', periodIndex, recurringUnits, targetUnits], account: owner })
+            const hash = await wc.deployContract({ abi: PiggyJarTRBTCAbi as any, bytecode: PiggyJarTRBTCBytecode as Hex, args: [owner, name.trim() || 'tRBTC Jar', periodIndex, recurringUnits, targetUnits], account: owner, chain: rootstockTestnet })
             const receipt = await publicClient!.waitForTransactionReceipt({ hash })
             const deployedAddress = receipt.contractAddress as `0x${string}` | undefined
             if (!deployedAddress) throw new Error('No contract address in receipt')
