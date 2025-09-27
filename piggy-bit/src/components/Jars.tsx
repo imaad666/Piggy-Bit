@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
-import { useAccount, useChainId, useSwitchChain, usePublicClient } from 'wagmi'
+import { useAccount, useChainId, useSwitchChain } from 'wagmi'
 import type { Hex } from 'viem'
+import { createPublicClient, http } from 'viem'
 import { PiggyJarTRBTCAbi, PiggyJarTRBTCBytecode } from '../contracts/PiggyJarTRBTC'
 import { PiggyJarPYUSDAbi, PiggyJarPYUSDBytecode } from '../contracts/PiggyJarPYUSD'
 import { PiggyJarPYUSDUPIAbi, PiggyJarPYUSDUPIBytecode } from '../contracts/PiggyJarPYUSDUPI'
@@ -9,9 +10,20 @@ import { getWalletClient } from 'wagmi/actions'
 import { config as wagmiConfig, rootstockTestnet, sepoliaTestnet } from '../wagmi'
 
 // Exchange rates and constants
-const INR_PER_RBTC = 9720986 // Mock exchange rate: 1 RBTC = 1 BTC ≈ ₹9.7M INR (Dec 2024)
-const INR_PER_PYUSD = 85 // Mock exchange rate: 1 PYUSD ≈ ₹85 INR (Dec 2024)
+const INR_PER_RBTC = 9783569 // Mock exchange rate: 1 RBTC = 1 BTC ≈ ₹9.7M INR 
+const INR_PER_PYUSD = 85 // Mock exchange rate: 1 PYUSD ≈ ₹85 INR
 const PYUSD_ADDRESS_SEPOLIA = '0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9' // PYUSD on Sepolia testnet
+
+// Create dedicated public clients for each chain
+const rootstockPublicClient = createPublicClient({
+    chain: rootstockTestnet,
+    transport: http()
+})
+
+const sepoliaPublicClient = createPublicClient({
+    chain: sepoliaTestnet,
+    transport: http()
+})
 
 export type Jar = {
     id: string
@@ -53,7 +65,6 @@ export function Jars() {
     const { isConnected, address } = useAccount()
     const chainId = useChainId()
     const { switchChainAsync } = useSwitchChain()
-    const publicClient = usePublicClient()
 
     const [jars, setJars] = useState<Jar[]>([])
     const [createOpen, setCreateOpen] = useState(false)
@@ -193,7 +204,7 @@ export function Jars() {
             const recurringUnits = BigInt(Math.round(topupVal * 10 ** 18))
             const periodIndex = cadence === 'daily' ? 0 : (cadence === 'weekly' ? 1 : 2)
             const hash = await wc.deployContract({ abi: PiggyJarTRBTCAbi as any, bytecode: PiggyJarTRBTCBytecode as Hex, args: [owner, nameVal, periodIndex, recurringUnits, targetUnits], account: owner, chain: rootstockTestnet })
-            const receipt = await publicClient!.waitForTransactionReceipt({ hash })
+            const receipt = await rootstockPublicClient.waitForTransactionReceipt({ hash })
             const addr = receipt.contractAddress as `0x${string}` | undefined
             if (!addr) throw new Error('No address')
             const newJar: Jar = { id: Math.random().toString(36).slice(2), name: nameVal, targetTrbtc: targetVal, thresholdTrbtc: targetVal, recurringTrbtc: topupVal, cadence, depositedTrbtc: 0, status: 'filling', isDeployed: true, contractAddress: addr, isTrbtcJar: true }
@@ -232,7 +243,7 @@ export function Jars() {
                 account: owner,
                 chain: sepoliaTestnet
             })
-            const receipt = await publicClient!.waitForTransactionReceipt({ hash })
+            const receipt = await sepoliaPublicClient.waitForTransactionReceipt({ hash })
             const addr = receipt.contractAddress as `0x${string}` | undefined
             if (!addr) throw new Error('No address')
             const newJar: Jar = {
@@ -284,7 +295,7 @@ export function Jars() {
                 account: owner,
                 chain: sepoliaTestnet
             })
-            const receipt = await publicClient!.waitForTransactionReceipt({ hash })
+            const receipt = await sepoliaPublicClient.waitForTransactionReceipt({ hash })
             const addr = receipt.contractAddress as `0x${string}` | undefined
             if (!addr) throw new Error('No address')
             const newJar: Jar = {
@@ -327,7 +338,7 @@ export function Jars() {
             value: amountInWei,
             chain: rootstockTestnet
         })
-        await publicClient!.waitForTransactionReceipt({ hash })
+        await rootstockPublicClient.waitForTransactionReceipt({ hash })
 
         setJars(prev => prev.map(j => {
             if (j.id !== jar.id) return j
@@ -349,7 +360,7 @@ export function Jars() {
         const owner = (await wc.getAddresses())[0]
 
         const hash = await wc.writeContract({ abi: PiggyJarTRBTCAbi as any, address: jar.contractAddress as `0x${string}`, functionName: 'breakJar', args: [], account: owner, chain: rootstockTestnet })
-        await publicClient!.waitForTransactionReceipt({ hash })
+        await rootstockPublicClient.waitForTransactionReceipt({ hash })
 
         onBreakJar(jar.id)
     }
@@ -371,7 +382,7 @@ export function Jars() {
             account: owner,
             chain: sepoliaTestnet
         })
-        await publicClient!.waitForTransactionReceipt({ hash: approveHash })
+        await sepoliaPublicClient.waitForTransactionReceipt({ hash: approveHash })
 
         // Then deposit PYUSD
         const jarAbi = jar.isPyusdUpiJar ? PiggyJarPYUSDUPIAbi : PiggyJarPYUSDAbi
@@ -383,7 +394,7 @@ export function Jars() {
             account: owner,
             chain: sepoliaTestnet
         })
-        await publicClient!.waitForTransactionReceipt({ hash })
+        await sepoliaPublicClient.waitForTransactionReceipt({ hash })
 
         setJars(prev => prev.map(j => {
             if (j.id !== jar.id) return j
@@ -413,7 +424,7 @@ export function Jars() {
             account: owner,
             chain: sepoliaTestnet
         })
-        await publicClient!.waitForTransactionReceipt({ hash })
+        await sepoliaPublicClient.waitForTransactionReceipt({ hash })
 
         onBreakJar(jar.id)
     }
@@ -437,7 +448,7 @@ export function Jars() {
             const recurringUnits = BigInt(Math.round(recurringTrbtc * 10 ** 18))
             const periodIndex = cadence === 'daily' ? 0 : (cadence === 'weekly' ? 1 : 2)
             const hash = await wc.deployContract({ abi: PiggyJarTRBTCAbi as any, bytecode: PiggyJarTRBTCBytecode as Hex, args: [owner, name.trim() || 'tRBTC Jar', periodIndex, recurringUnits, targetUnits], account: owner, chain: rootstockTestnet })
-            const receipt = await publicClient!.waitForTransactionReceipt({ hash })
+            const receipt = await rootstockPublicClient.waitForTransactionReceipt({ hash })
             const deployedAddress = receipt.contractAddress as `0x${string}` | undefined
             if (!deployedAddress) throw new Error('No contract address in receipt')
             const newJar: Jar = { id: Math.random().toString(36).slice(2), name: name.trim() || 'tRBTC Jar', targetTrbtc, thresholdTrbtc: targetTrbtc, recurringTrbtc, cadence, depositedTrbtc: 0, status: 'filling', isDeployed: true, contractAddress: deployedAddress, isTrbtcJar: true }
