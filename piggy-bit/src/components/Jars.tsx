@@ -1,29 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAccount, useChainId, useSwitchChain, usePublicClient } from 'wagmi'
 import type { Hex } from 'viem'
-import { PiggyJarAbi, PiggyJarBytecode } from '../contracts/PiggyJar'
-import { PiggyJarUSDCAbi, PiggyJarUSDCBytecode } from '../contracts/PiggyJarUSDC'
-import { ERC20Abi } from '../contracts/erc20'
+import { PiggyJarTRBTCAbi, PiggyJarTRBTCBytecode } from '../contracts/PiggyJarTRBTC'
 import { getWalletClient } from 'wagmi/actions'
 import { config as wagmiConfig } from '../wagmi'
 
-const INR_PER_USDC = 85
+// tRBTC jar functionality
 
 export type Jar = {
     id: string
     name: string
-    targetUsd: number
-    thresholdUsd: number
-    recurringUsd: number
-    targetAsset: 'RBTC' | 'ETH'
+    targetTrbtc: number
+    thresholdTrbtc: number
+    recurringTrbtc: number
     cadence: 'daily' | 'weekly' | 'monthly'
-    autoSwap: boolean
-    depositedUsd: number
+    depositedTrbtc: number
     status: 'filling' | 'filled' | 'broken'
     isDeployed: boolean
     contractAddress?: `0x${string}`
-    isUsdcJar?: boolean
-    usdcToken?: `0x${string}`
+    isTrbtcJar?: boolean
     // simulation bookkeeping: last simulated day when a period was paid
     lastSimDayPaid?: number
 }
@@ -54,13 +49,11 @@ export function Jars() {
 
     const [jars, setJars] = useState<Jar[]>([])
     const [createOpen, setCreateOpen] = useState(false)
-    const [usdcOpen, setUsdcOpen] = useState(false)
+    const [trbtcOpen, setTrbtcOpen] = useState(false)
     const [name, setName] = useState('My Jar')
-    const [target, setTarget] = useState('10')
-    const [recurring, setRecurring] = useState('100')
-    const [asset] = useState<'RBTC' | 'ETH'>('RBTC')
+    const [target, setTarget] = useState('0.01')
+    const [recurring, setRecurring] = useState('0.001')
     const [cadence, setCadence] = useState<'daily' | 'weekly' | 'monthly'>('daily')
-    const [autoSwap] = useState(true)
     const [creating, setCreating] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
 
@@ -73,11 +66,10 @@ export function Jars() {
         try { const r = localStorage.getItem('piggybit:notifications'); return r ? JSON.parse(r) : [] } catch { return [] }
     })
 
-    // USDC modal fields
-    const [usdcName, setUsdcName] = useState('USDC Jar')
-    const [usdcTarget, setUsdcTarget] = useState('10')
-    const [usdcTopup, setUsdcTopup] = useState('5')
-    const [usdcTokenAddr, setUsdcTokenAddr] = useState('')
+    // tRBTC modal fields
+    const [trbtcName, setTrbtcName] = useState('tRBTC Jar')
+    const [trbtcTarget, setTrbtcTarget] = useState('0.01')
+    const [trbtcTopup, setTrbtcTopup] = useState('0.001')
 
     const [upiJarId, setUpiJarId] = useState<string | null>(null)
 
@@ -118,23 +110,21 @@ export function Jars() {
                 setCadence(params.period)
                 setCreateOpen(true)
             },
-            openCreateUsdcJarPrefill: (params: { name: string; targetUsdc: number; autoTopupUsdc: number; period: 'daily' | 'weekly' | 'monthly'; token?: `0x${string}` }) => {
-                setUsdcName(params.name || 'USDC Jar')
-                setUsdcTarget(String(Math.max(1, Math.floor(params.targetUsdc))))
-                setUsdcTopup(String(Math.max(1, Math.floor(params.autoTopupUsdc))))
+            openCreateTrbtcJarPrefill: (params: { name: string; targetTrbtc: number; autoTopupTrbtc: number; period: 'daily' | 'weekly' | 'monthly' }) => {
+                setTrbtcName(params.name || 'tRBTC Jar')
+                setTrbtcTarget(String(Math.max(0.001, params.targetTrbtc)))
+                setTrbtcTopup(String(Math.max(0.001, params.autoTopupTrbtc)))
                 setCadence(params.period)
-                if (params.token) setUsdcTokenAddr(params.token)
-                setUsdcOpen(true)
+                setTrbtcOpen(true)
             },
         }
     }, [])
 
     const etaText = useMemo(() => {
-        const targetUsdNum = Number(target)
-        const topupInr = Number(recurring)
-        if (!Number.isFinite(targetUsdNum) || !Number.isFinite(topupInr) || targetUsdNum <= 0 || topupInr <= 0) return ''
-        const depositUsdc = topupInr / INR_PER_USDC
-        const periodsNeeded = Math.ceil(targetUsdNum / depositUsdc)
+        const targetTrbtcNum = Number(target)
+        const topupTrbtc = Number(recurring)
+        if (!Number.isFinite(targetTrbtcNum) || !Number.isFinite(topupTrbtc) || targetTrbtcNum <= 0 || topupTrbtc <= 0) return ''
+        const periodsNeeded = Math.ceil(targetTrbtcNum / topupTrbtc)
         const periodDays = cadence === 'daily' ? 1 : cadence === 'weekly' ? 7 : 30
         const days = periodsNeeded * periodDays
         return `Est. to fill: ~${days} days`
@@ -152,32 +142,28 @@ export function Jars() {
         }
     }
 
-    async function onCreateUsdcJar() {
+    async function onCreateTrbtcJar() {
         setFormError(null)
-        const nameVal = usdcName.trim() || 'USDC Jar'
-        const targetVal = Number(usdcTarget)
-        const topupVal = Number(usdcTopup)
-        const token = usdcTokenAddr.trim() as `0x${string}`
-        if (!/^0x[0-9a-fA-F]{40}$/.test(token)) { setFormError('Enter a valid token address'); return }
-        if (!Number.isFinite(targetVal) || targetVal <= 0) { setFormError('Enter a valid target (USDC).'); return }
-        if (!Number.isFinite(topupVal) || topupVal <= 0) { setFormError('Enter a valid auto top-up (USDC).'); return }
+        const nameVal = trbtcName.trim() || 'tRBTC Jar'
+        const targetVal = Number(trbtcTarget)
+        const topupVal = Number(trbtcTopup)
+        if (!Number.isFinite(targetVal) || targetVal <= 0) { setFormError('Enter a valid target (tRBTC).'); return }
+        if (!Number.isFinite(topupVal) || topupVal <= 0) { setFormError('Enter a valid auto top-up (tRBTC).'); return }
         try {
             setCreating(true)
             if (chainId !== 31) { await ensureRskTestnet(); try { await switchChainAsync({ chainId: 31 }) } catch { } }
             const wc = await getWalletClient(wagmiConfig, { chainId: 31 })
             if (!wc) { setFormError('Wallet not ready.'); setCreating(false); return }
             const owner = (await wc.getAddresses())[0]
-            // scale UI amounts to token units
-            const decimals = await publicClient!.readContract({ abi: ERC20Abi as any, address: token, functionName: 'decimals', args: [] }) as number
-            const mul = 10 ** decimals
-            const targetUnits = BigInt(Math.round(targetVal * mul))
-            const recurringUnits = BigInt(Math.round(topupVal * mul))
+            // Convert tRBTC to wei (18 decimals)
+            const targetUnits = BigInt(Math.round(targetVal * 10 ** 18))
+            const recurringUnits = BigInt(Math.round(topupVal * 10 ** 18))
             const periodIndex = cadence === 'daily' ? 0 : (cadence === 'weekly' ? 1 : 2)
-            const hash = await wc.deployContract({ abi: PiggyJarUSDCAbi as any, bytecode: PiggyJarUSDCBytecode as Hex, args: [owner, token, nameVal, periodIndex, recurringUnits, targetUnits], account: owner })
+            const hash = await wc.deployContract({ abi: PiggyJarTRBTCAbi as any, bytecode: PiggyJarTRBTCBytecode as Hex, args: [owner, nameVal, periodIndex, recurringUnits, targetUnits], account: owner })
             const receipt = await publicClient!.waitForTransactionReceipt({ hash })
             const addr = receipt.contractAddress as `0x${string}` | undefined
             if (!addr) throw new Error('No address')
-            const newJar: Jar = { id: Math.random().toString(36).slice(2), name: nameVal, targetUsd: targetVal, thresholdUsd: targetVal, recurringUsd: topupVal, targetAsset: 'RBTC', cadence, autoSwap, depositedUsd: 0, status: 'filling', isDeployed: true, contractAddress: addr, isUsdcJar: true, usdcToken: token }
+            const newJar: Jar = { id: Math.random().toString(36).slice(2), name: nameVal, targetTrbtc: targetVal, thresholdTrbtc: targetVal, recurringTrbtc: topupVal, cadence, depositedTrbtc: 0, status: 'filling', isDeployed: true, contractAddress: addr, isTrbtcJar: true }
             const updatedJars = [newJar, ...jars]
             setJars(updatedJars)
             // IMMEDIATELY save to localStorage
@@ -185,38 +171,49 @@ export function Jars() {
                 console.log('IMMEDIATE SAVE: Saving new jar for address:', address)
                 writeJarsFor(address, updatedJars)
             }
-            setUsdcOpen(false)
+            setTrbtcOpen(false)
         } catch (e: any) { setFormError(e?.message || String(e)) } finally { setCreating(false) }
     }
 
-    async function approveUsdc(token: `0x${string}`, spender: `0x${string}`, amount: bigint) {
+    async function depositTrbtc(jar: Jar, amountInTrbtc: number) {
         const wc = await getWalletClient(wagmiConfig, { chainId: 31 })
         if (!wc) throw new Error('Wallet not ready')
         const owner = (await wc.getAddresses())[0]
-        const hash = await wc.writeContract({ abi: ERC20Abi as any, address: token, functionName: 'approve', args: [spender, amount], account: owner })
-        await publicClient!.waitForTransactionReceipt({ hash })
-    }
+        // Convert tRBTC to wei (18 decimals)
+        const amountInWei = BigInt(Math.round(amountInTrbtc * 10 ** 18))
 
-    async function depositUsdc(jar: Jar, token: `0x${string}`, amountInUsdc: number) {
-        const wc = await getWalletClient(wagmiConfig, { chainId: 31 })
-        if (!wc) throw new Error('Wallet not ready')
-        const owner = (await wc.getAddresses())[0]
-        const decimals = await publicClient!.readContract({ abi: ERC20Abi as any, address: token, functionName: 'decimals', args: [] }) as number
-        const amt = BigInt(Math.floor(amountInUsdc * 10 ** decimals))
-        await approveUsdc(token, jar.contractAddress as `0x${string}`, amt)
-        const hash = await wc.writeContract({ abi: PiggyJarUSDCAbi as any, address: jar.contractAddress as `0x${string}`, functionName: 'deposit', args: [amt], account: owner })
+        const hash = await wc.writeContract({
+            abi: PiggyJarTRBTCAbi as any,
+            address: jar.contractAddress as `0x${string}`,
+            functionName: 'deposit',
+            args: [],
+            account: owner,
+            value: amountInWei
+        })
         await publicClient!.waitForTransactionReceipt({ hash })
-        setJars(prev => prev.map(j => { if (j.id !== jar.id) return j; const newDeposited = (j.depositedUsd || 0) + amountInUsdc; const filled = newDeposited >= j.targetUsd; return { ...j, depositedUsd: newDeposited, status: filled ? 'filled' : 'filling' } }))
+
+        setJars(prev => prev.map(j => {
+            if (j.id !== jar.id) return j
+            const newDeposited = (j.depositedTrbtc || 0) + amountInTrbtc
+            const filled = newDeposited >= j.targetTrbtc
+            return { ...j, depositedTrbtc: newDeposited, status: filled ? 'filled' : 'filling' }
+        }))
+
         const updated = jars.find(j => j.id === jar.id)
-        if (updated && (updated.depositedUsd + amountInUsdc) >= updated.targetUsd) { await breakUsdcJar({ ...updated, depositedUsd: updated.depositedUsd + amountInUsdc }); alert('Jar filled. Funds returned to your wallet.') }
+        if (updated && (updated.depositedTrbtc + amountInTrbtc) >= updated.targetTrbtc) {
+            await breakTrbtcJar({ ...updated, depositedTrbtc: updated.depositedTrbtc + amountInTrbtc })
+            alert('Jar filled. Funds returned to your wallet.')
+        }
     }
 
-    async function breakUsdcJar(jar: Jar) {
+    async function breakTrbtcJar(jar: Jar) {
         const wc = await getWalletClient(wagmiConfig, { chainId: 31 })
         if (!wc) throw new Error('Wallet not ready')
         const owner = (await wc.getAddresses())[0]
-        const hash = await wc.writeContract({ abi: PiggyJarUSDCAbi as any, address: jar.contractAddress as `0x${string}`, functionName: 'breakJar', args: [], account: owner })
+
+        const hash = await wc.writeContract({ abi: PiggyJarTRBTCAbi as any, address: jar.contractAddress as `0x${string}`, functionName: 'breakJar', args: [], account: owner })
         await publicClient!.waitForTransactionReceipt({ hash })
+
         onBreakJar(jar.id)
     }
 
@@ -224,21 +221,25 @@ export function Jars() {
         e.preventDefault()
         if (creating) return
         setFormError(null)
-        const targetUsd = Number(target)
-        const topupInr = Number(recurring)
-        if (!Number.isFinite(targetUsd) || targetUsd <= 0) { setFormError('Enter a valid target (USDC).'); return }
-        if (!Number.isFinite(topupInr) || topupInr <= 0) { setFormError('Enter a valid auto top-up (INR).'); return }
+        const targetTrbtc = Number(target)
+        const recurringTrbtc = Number(recurring)
+        if (!Number.isFinite(targetTrbtc) || targetTrbtc <= 0) { setFormError('Enter a valid target (tRBTC).'); return }
+        if (!Number.isFinite(recurringTrbtc) || recurringTrbtc <= 0) { setFormError('Enter a valid recurring amount (tRBTC).'); return }
         try {
             setCreating(true)
             if (chainId !== 31) { await ensureRskTestnet(); try { await switchChainAsync({ chainId: 31 }) } catch { } }
             const wc = await getWalletClient(wagmiConfig, { chainId: 31 })
             if (!wc) { setFormError('Wallet not ready.'); setCreating(false); return }
             const owner = (await wc.getAddresses())[0]
-            const hash = await wc.deployContract({ abi: PiggyJarAbi as any, bytecode: PiggyJarBytecode as Hex, args: [owner, BigInt(targetUsd), BigInt(targetUsd), name.trim() || 'Jar'], account: owner })
+            // Convert tRBTC to wei (18 decimals)
+            const targetUnits = BigInt(Math.round(targetTrbtc * 10 ** 18))
+            const recurringUnits = BigInt(Math.round(recurringTrbtc * 10 ** 18))
+            const periodIndex = cadence === 'daily' ? 0 : (cadence === 'weekly' ? 1 : 2)
+            const hash = await wc.deployContract({ abi: PiggyJarTRBTCAbi as any, bytecode: PiggyJarTRBTCBytecode as Hex, args: [owner, name.trim() || 'tRBTC Jar', periodIndex, recurringUnits, targetUnits], account: owner })
             const receipt = await publicClient!.waitForTransactionReceipt({ hash })
             const deployedAddress = receipt.contractAddress as `0x${string}` | undefined
             if (!deployedAddress) throw new Error('No contract address in receipt')
-            const newJar: Jar = { id: Math.random().toString(36).slice(2), name: name.trim() || 'Jar', targetUsd, thresholdUsd: targetUsd, recurringUsd: topupInr, targetAsset: asset, cadence, autoSwap, depositedUsd: 0, status: 'filling', isDeployed: true, contractAddress: deployedAddress, isUsdcJar: false }
+            const newJar: Jar = { id: Math.random().toString(36).slice(2), name: name.trim() || 'tRBTC Jar', targetTrbtc, thresholdTrbtc: targetTrbtc, recurringTrbtc, cadence, depositedTrbtc: 0, status: 'filling', isDeployed: true, contractAddress: deployedAddress, isTrbtcJar: true }
             const updatedJars = [newJar, ...jars]
             setJars(updatedJars)
             // IMMEDIATELY save to localStorage
@@ -250,15 +251,20 @@ export function Jars() {
         } catch (err: any) { setFormError(err?.message || String(err)) } finally { setCreating(false) }
     }
 
-    function onSimulateDeposit(jarId: string, amountInInr: number) {
-        const amountUsdc = amountInInr / INR_PER_USDC
-        setJars(prev => prev.map(j => { if (j.id !== jarId) return j; if (j.isUsdcJar) return j; const depositedUsd = (Number(j.depositedUsd) || 0) + amountUsdc; const filled = depositedUsd >= j.targetUsd; return { ...j, depositedUsd, status: filled ? 'filled' : 'filling' } }))
+    function onSimulateDeposit(jarId: string, amountInTrbtc: number) {
+        setJars(prev => prev.map(j => {
+            if (j.id !== jarId) return j;
+            if (j.isTrbtcJar) return j;
+            const depositedTrbtc = (Number(j.depositedTrbtc) || 0) + amountInTrbtc;
+            const filled = depositedTrbtc >= j.targetTrbtc;
+            return { ...j, depositedTrbtc, status: filled ? 'filled' : 'filling' }
+        }))
     }
 
-    function onBreakJar(jarId: string) { setJars(prev => prev.map(j => j.id === jarId ? { ...j, status: 'broken', depositedUsd: 0 } : j)) }
+    function onBreakJar(jarId: string) { setJars(prev => prev.map(j => j.id === jarId ? { ...j, status: 'broken', depositedTrbtc: 0 } : j)) }
     function openUpi(jarId: string) { setUpiJarId(jarId) }
     function closeUpi() { setUpiJarId(null) }
-    function payUpi(jarId: string) { const jar = jars.find(j => j.id === jarId); if (!jar) return; onSimulateDeposit(jarId, Number(jar.recurringUsd) || 0); closeUpi() }
+    function payUpi(jarId: string) { const jar = jars.find(j => j.id === jarId); if (!jar) return; onSimulateDeposit(jarId, Number(jar.recurringTrbtc) || 0); closeUpi() }
 
     // Simulation helpers
     function periodDaysFor(c: 'daily' | 'weekly' | 'monthly') { return c === 'daily' ? 1 : c === 'weekly' ? 7 : 30 }
@@ -273,7 +279,7 @@ export function Jars() {
             const lastPaid = j.lastSimDayPaid ?? prevDay
             const totalPeriodsDue = Math.floor((nextDay - lastPaid) / pd)
             if (totalPeriodsDue <= 0) return j
-            // create a notification to settle due periods (USDC or mock UPI)
+            // create a notification to settle due periods (tRBTC or mock UPI)
             setNotifications(curr => {
                 // remove any existing notification for this jar to avoid duplicates
                 const filtered = curr.filter(n => n.jarId !== j.id)
@@ -286,12 +292,12 @@ export function Jars() {
     async function settleNotification(n: Notification) {
         const jar = jars.find(j => j.id === n.jarId)
         if (!jar) { setNotifications(prev => prev.filter(x => x.id !== n.id)); return }
-        if (jar.isUsdcJar) {
-            if (!jar.usdcToken || !jar.contractAddress) { setNotifications(prev => prev.filter(x => x.id !== n.id)); return }
+        if (jar.isTrbtcJar) {
+            if (!jar.contractAddress) { setNotifications(prev => prev.filter(x => x.id !== n.id)); return }
             const periods = n.periods || 1
-            const amount = (Number(jar.recurringUsd) || 0) * periods
+            const amount = (Number(jar.recurringTrbtc) || 0) * periods
             try {
-                await depositUsdc(jar, jar.usdcToken as `0x${string}`, amount)
+                await depositTrbtc(jar, amount)
             } catch (e) {
                 // keep the notification if failed
                 return
@@ -351,7 +357,7 @@ export function Jars() {
                 <h2 style={{ fontSize: 20, margin: 0 }}>My Jars</h2>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setCreateOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Create Jar</button>
-                    <button onClick={() => setUsdcOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#e5e5e5' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Create USDC Jar</button>
+                    <button onClick={() => setTrbtcOpen(true)} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#e5e5e5' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Create tRBTC Jar</button>
                     <button onClick={clearCurrentJars} disabled={!isConnected} style={{ padding: '8px 14px', border: '1px solid #000', background: isConnected ? '#fff' : '#f0f0f0', color: isConnected ? '#000' : '#666', cursor: isConnected ? 'pointer' : 'not-allowed' }}>Clear Jars</button>
                 </div>
             </section>
@@ -361,8 +367,8 @@ export function Jars() {
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
                     {activeJars.map(jar => {
-                        const deposited = Number(jar.depositedUsd) || 0
-                        const targetVal = Number(jar.targetUsd) || 0
+                        const deposited = Number(jar.depositedTrbtc || jar.depositedUsd) || 0
+                        const targetVal = Number(jar.targetTrbtc || jar.targetUsd) || 0
                         const pct = targetVal > 0 ? Math.min(100, Math.round((deposited / targetVal) * 100)) : 0
                         const filled = jar.status === 'filled'
                         const cardStyle: React.CSSProperties = filled ? { border: '1px solid #000', padding: 16, background: '#000', color: '#fff' } : { border: '1px solid #000', padding: 16, background: '#fff', color: '#000' }
@@ -376,11 +382,11 @@ export function Jars() {
                                     <span style={{ fontSize: 12 }}>{jar.status.toUpperCase()}</span>
                                 </div>
                                 <div style={{ fontSize: 13, marginBottom: 8 }}>
-                                    {`Target: $${targetVal.toFixed(2)} • ${jar.isUsdcJar ? 'Auto top-up: $' + (Number(jar.recurringUsd) || 0).toFixed(2) + ' USDC' : 'Auto top-up: ₹' + (Number(jar.recurringUsd) || 0).toFixed(0)} • Asset: ${jar.targetAsset}`}
+                                    {`Target: ${targetVal.toFixed(4)} tRBTC • Auto top-up: ${(Number(jar.recurringTrbtc || jar.recurringUsd) || 0).toFixed(4)} tRBTC`}
                                 </div>
-                                <div style={{ fontSize: 12, marginBottom: 8 }}>Cadence: {jar.cadence} • Auto-swap: {jar.autoSwap ? 'On' : 'Off'}</div>
+                                <div style={{ fontSize: 12, marginBottom: 8 }}>Cadence: {jar.cadence}</div>
                                 <div style={{ fontSize: 13, marginBottom: 8 }}>
-                                    {`$${deposited.toFixed(2)} / $${targetVal.toFixed(2)} (${pct}%)`}
+                                    {`${deposited.toFixed(4)} / ${targetVal.toFixed(4)} tRBTC (${pct}%)`}
                                 </div>
                                 <div style={{ height: 8, border: '1px solid #000', background: barTrack, marginBottom: 12 }}>
                                     <div style={{ height: '100%', width: `${pct}%`, background: barBg }} />
@@ -391,12 +397,12 @@ export function Jars() {
                                     </div>
                                 )}
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                    {jar.isUsdcJar ? (
+                                    {jar.isTrbtcJar ? (
                                         <>
                                             {canTopUp && (
-                                                <button onClick={() => depositUsdc(jar, jar.usdcToken as `0x${string}`, Number(jar.recurringUsd) || 0)} style={{ padding: '6px 12px', border: '1px solid #000', background: filled ? '#fff' : '#000', color: filled ? '#000' : '#fff', cursor: 'pointer' }}>Pay</button>
+                                                <button onClick={() => depositTrbtc(jar, Number(jar.recurringTrbtc || jar.recurringUsd) || 0)} style={{ padding: '6px 12px', border: '1px solid #000', background: filled ? '#fff' : '#000', color: filled ? '#000' : '#fff', cursor: 'pointer' }}>Pay tRBTC</button>
                                             )}
-                                            <button onClick={() => breakUsdcJar(jar)} style={{ padding: '6px 12px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Break Jar</button>
+                                            <button onClick={() => breakTrbtcJar(jar)} style={{ padding: '6px 12px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Break Jar</button>
                                         </>
                                     ) : (
                                         <>
@@ -425,7 +431,7 @@ export function Jars() {
                                     <strong>{jar.name}</strong>
                                     <span style={{ fontSize: 12 }}>BROKEN</span>
                                 </div>
-                                <div style={{ fontSize: 13, marginBottom: 8 }}>Target: ${jar.targetUsd.toFixed(2)}</div>
+                                <div style={{ fontSize: 13, marginBottom: 8 }}>Target: {(Number(jar.targetTrbtc || jar.targetUsd) || 0).toFixed(4)} tRBTC</div>
                                 {jar.contractAddress && (
                                     <div style={{ fontSize: 12, marginBottom: 8 }}>Contract: <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>{jar.contractAddress}</span></div>
                                 )}
@@ -436,31 +442,29 @@ export function Jars() {
                 </section>
             )}
 
-            {usdcOpen && (
-                <div onClick={() => setUsdcOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div onClick={e => e.stopPropagation()} style={{ width: 900, background: '#fff', color: '#000', border: '1px solid #000', padding: 16 }}>
+            {trbtcOpen && (
+                <div onClick={() => setTrbtcOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div onClick={e => e.stopPropagation()} style={{ width: 600, background: '#fff', color: '#000', border: '1px solid #000', padding: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <h3 style={{ margin: 0 }}>Create USDC Jar</h3>
-                            <button onClick={() => setUsdcOpen(false)} style={{ border: '1px solid #000', background: '#fff', color: '#000', padding: '4px 8px', cursor: 'pointer' }}>Close</button>
+                            <h3 style={{ margin: 0 }}>Create tRBTC Jar</h3>
+                            <button onClick={() => setTrbtcOpen(false)} style={{ border: '1px solid #000', background: '#fff', color: '#000', padding: '4px 8px', cursor: 'pointer' }}>Close</button>
                         </div>
-                        <form onSubmit={(e) => { e.preventDefault(); onCreateUsdcJar() }} style={{ marginTop: 12 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 12 }}>
+                        <form onSubmit={(e) => { e.preventDefault(); onCreateTrbtcJar() }} style={{ marginTop: 12 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Jar name</span>
-                                    <input value={usdcName} onChange={e => setUsdcName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <input value={trbtcName} onChange={e => setTrbtcName(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>Target (USDC)</span>
-                                    <input value={usdcTarget} onChange={e => setUsdcTarget(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <span>Target (tRBTC)</span>
+                                    <input value={trbtcTarget} onChange={e => setTrbtcTarget(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
                                 <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>Auto top-up (USDC)</span>
-                                    <input value={usdcTopup} onChange={e => setUsdcTopup(e.target.value)} type="number" min="1" step="1" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
+                                    <span>Auto top-up (tRBTC)</span>
+                                    <input value={trbtcTopup} onChange={e => setTrbtcTopup(e.target.value)} type="number" min="0.001" step="0.001" style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
                                 </label>
-                                <label style={{ display: 'grid', gap: 6 }}>
-                                    <span>USDC token address</span>
-                                    <input value={usdcTokenAddr} onChange={e => setUsdcTokenAddr(e.target.value)} placeholder="0x..." style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }} />
-                                </label>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginTop: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span>Recurring period</span>
                                     <select value={cadence} onChange={e => setCadence(e.target.value as 'daily' | 'weekly' | 'monthly')} style={{ padding: '8px 10px', border: '1px solid #000', background: '#fff', color: '#000' }}>
@@ -472,9 +476,9 @@ export function Jars() {
                             </div>
                             {formError && (<div style={{ marginTop: 8, color: '#cc0000', fontSize: 12 }}>{formError}</div>)}
                             <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                                <button type="button" onClick={() => setUsdcOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
+                                <button type="button" onClick={() => setTrbtcOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
                                 <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                    {creating ? 'minting' : 'Mint Jar'}
+                                    {creating ? 'Creating...' : 'Create tRBTC Jar'}
                                     <img src="/rootstock_logo.png" alt="Rootstock" style={{ width: 18, height: 18, objectFit: 'contain' }} />
                                 </button>
                             </div>
@@ -515,7 +519,7 @@ export function Jars() {
                             </div>
                             {etaText && (<div style={{ marginTop: 8, fontSize: 12 }}>{etaText}</div>)}
                             {formError && (<div style={{ marginTop: 8, color: '#cc0000', fontSize: 12 }}>{formError}</div>)}
-                            <div style={{ marginTop: 8, fontSize: 11, opacity: 0.8 }}>Assuming 1 USDC ≈ ₹{INR_PER_USDC}</div>
+                            <div style={{ marginTop: 8, fontSize: 11, opacity: 0.8 }}>Native tRBTC savings jar</div>
                             <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                                 <button type="button" onClick={() => setCreateOpen(false)} style={{ padding: '8px 14px', border: '1px solid #000', background: '#fff', color: '#000', cursor: 'pointer' }}>Cancel</button>
                                 <button type="submit" disabled={creating} style={{ padding: '8px 14px', border: '1px solid #000', background: '#000', color: '#fff', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -530,8 +534,7 @@ export function Jars() {
 
             {upiJarId && (() => {
                 const jar = jars.find(j => j.id === upiJarId)
-                const amtInr = jar ? Number(jar.recurringUsd) || 0 : 0
-                const amtUsdc = amtInr / INR_PER_USDC
+                const amtTrbtc = jar ? Number(jar.recurringTrbtc) || 0 : 0
                 const filled = jar?.status === 'filled'
                 return (
                     <div onClick={closeUpi} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -541,7 +544,7 @@ export function Jars() {
                                 <button onClick={closeUpi} style={{ border: '1px solid #000', background: filled ? '#000' : '#fff', color: filled ? '#fff' : '#000', padding: '4px 8px', cursor: 'pointer' }}>Close</button>
                             </div>
                             <div style={{ marginTop: 12 }}>Jar: <strong>{jar?.name}</strong></div>
-                            <div style={{ marginTop: 8 }}>Amount: <strong>₹{amtInr.toFixed(0)} (~${amtUsdc.toFixed(2)} USDC)</strong></div>
+                            <div style={{ marginTop: 8 }}>Amount: <strong>{amtTrbtc.toFixed(4)} tRBTC</strong></div>
                             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
                                 <button onClick={() => payUpi(upiJarId)} style={{ padding: '8px 14px', border: '1px solid #000', background: filled ? '#fff' : '#000', color: filled ? '#000' : '#fff', cursor: 'pointer' }}>Pay</button>
                             </div>
