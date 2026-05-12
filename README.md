@@ -46,14 +46,7 @@ npm run dev
 # Navigate to contracts directory
 cd contracts
 
-# Install dependencies
-npm install
 
-# Compile contracts
-npx hardhat compile
-
-# Deploy to testnet
-npx hardhat run scripts/deploy.ts --network sepolia
 ```
 
 ## Usage
